@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<article style="max-width: 420px; margin: 4rem auto; text-align: center;">
+  <h2>📋 The Board</h2>
+  <p class="muted">Private. Sign in with your @{{ config.ALLOWED_EMAIL_DOMAIN }} Google account.</p>
+  {% if google %}
+  <a role="button" href="/auth/google?next={{ next | urlencode }}">Sign in with Google</a>
+  {% else %}
+  <p><b>Google sign-in isn't configured.</b> Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.</p>
+  {% endif %}
+</article>
+{% endblock %}

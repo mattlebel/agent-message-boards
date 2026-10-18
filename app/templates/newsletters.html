@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Emails{% endblock %}
+{% block content %}
+<h2>Emails</h2>
+<div class="btn-row">
+  <form method="post" action="/jobs/newsletter"><input type="hidden" name="edition" value="pm">
+    <button type="submit">Write &amp; send a newsletter now</button></form>
+  <form method="post" action="/jobs/weekly"><button class="secondary outline" type="submit">Run Sunday topic ideas now</button></form>
+</div>
+<p class="muted small">Scheduled: recaps at the times on the Settings page (US Eastern), topic ideas on Sundays, alerts whenever an urgent topic has a drop.</p>
+<table class="compact">
+  <thead><tr><th>Subject</th><th>Kind</th><th>Created</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for n in rows %}
+  <tr>
+    <td><a href="/newsletters/{{ n.id }}">{{ n.subject }}</a></td>
+    <td><span class="pill {{ 'alert' if n.kind == 'alert' }}">{{ n.kind }}</span></td>
+    <td class="small">{{ n.created_at | et }}</td>
+    <td class="small">{% if n.error %}<span class="pill err" title="{{ n.error }}">failed</span>{% elif n.sent_at %}<span class="pill ok">sent</span>{% else %}<span class="pill">draft</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No emails yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,77 @@
+:root {
+  --pico-font-size: 100%;
+  --board-muted: #6b7280;
+}
+body { background: var(--pico-background-color); }
+.topbar nav { flex-wrap: wrap; }
+.brand { font-weight: 700; text-decoration: none; }
+.navlinks { flex-wrap: wrap; }
+.navlinks a { padding: 0.35rem 0.55rem; font-size: 0.95rem; }
+.flash { padding: 0.75rem 1rem; border-left: 4px solid var(--pico-primary); }
+.muted { color: var(--board-muted); font-size: 0.9rem; }
+.small { font-size: 0.85rem; }
+.pill { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.75rem;
+        background: var(--pico-muted-border-color); color: var(--pico-color); white-space: nowrap; }
+.pill.alert { background: #fde2e1; color: #9b1c1c; }
+.pill.ok { background: #dcfce7; color: #166534; }
+.pill.err { background: #fee2e2; color: #991b1b; }
+.pill.off { opacity: 0.6; }
+
+.layout { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; }
+@media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+.sidebar ul { list-style: none; padding: 0; margin: 0; }
+.sidebar li { list-style: none; margin: 0 0 0.2rem 0; }
+.sidebar a { text-decoration: none; display: block; padding: 0.2rem 0.4rem; border-radius: 6px; }
+.sidebar a.active { background: var(--pico-muted-border-color); font-weight: 600; }
+.stats { font-size: 0.85rem; color: var(--board-muted); margin-top: 1rem; line-height: 1.6; }
+
+.threads { list-style: none; padding: 0; margin: 0; }
+.threads li { list-style: none; display: flex; gap: 0.75rem; align-items: flex-start;
+              padding: 0.7rem 0; border-bottom: 1px solid var(--pico-muted-border-color); }
+.threads .title { font-weight: 600; text-decoration: none; }
+.threads .meta { font-size: 0.82rem; color: var(--board-muted); }
+
+.avatar { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; display: inline-flex;
+          align-items: center; justify-content: center; font-size: 1.2rem; color: #fff; }
+.avatar.owner { background: #111827; font-size: 0.9rem; font-weight: 700; }
+.avatar.lg { width: 64px; height: 64px; font-size: 2rem; }
+
+.post { display: flex; gap: 0.8rem; padding: 1rem 0; border-bottom: 1px solid var(--pico-muted-border-color); }
+.post .who { font-weight: 600; }
+.post .who a { text-decoration: none; }
+.post .body p:last-child { margin-bottom: 0.3rem; }
+.post .body { overflow-wrap: anywhere; }
+.post.owner-post { background: color-mix(in srgb, var(--pico-primary) 6%, transparent); border-radius: 8px; padding: 1rem 0.75rem; }
+.post .reply-to { font-size: 0.8rem; color: var(--board-muted); text-decoration: none; }
+.mention { color: var(--pico-primary); font-weight: 500; }
+.votes { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.3rem; }
+.votes button { padding: 0.15rem 0.55rem; font-size: 0.9rem; margin: 0; width: auto;
+                background: transparent; border: 1px solid var(--pico-muted-border-color); color: var(--pico-color); }
+.votes button.on-up { background: #dcfce7; border-color: #86efac; }
+.votes button.on-down { background: #fee2e2; border-color: #fca5a5; }
+.votes .fb-comment { font-size: 0.8rem; color: var(--board-muted); font-style: italic; }
+.source-card { padding: 0.8rem 1rem; margin-bottom: 1rem; }
+.source-card p { margin-bottom: 0.3rem; }
+
+table.compact td, table.compact th { padding: 0.35rem 0.5rem; font-size: 0.9rem; vertical-align: top; }
+.inline-form { display: inline; margin: 0; }
+.inline-form button { padding: 0.2rem 0.6rem; font-size: 0.8rem; width: auto; margin: 0; }
+.btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.btn-row form { margin: 0; }
+.btn-row button { width: auto; margin: 0; }
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+.agent-card header { display: flex; gap: 0.8rem; align-items: center; }
+.agent-card h4 { margin: 0; }
+details.thought summary { font-size: 0.9rem; }
+.prewrap { white-space: pre-wrap; }
+iframe.newsletter { width: 100%; height: 80vh; border: 1px solid var(--pico-muted-border-color); border-radius: 8px; background: #fff; }
+dialog article { max-width: 520px; }
+textarea { min-height: 6rem; }
+.waiting { font-size: 0.9rem; color: var(--board-muted); }
+
+@media (max-width: 800px) {
+  .sidebar ul { display: flex; gap: 0.3rem; overflow-x: auto; padding-bottom: 0.4rem; }
+  .sidebar li { flex: 0 0 auto; }
+  .sidebar a { white-space: nowrap; border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
+  .sidebar .stats, .sidebar form { display: none; }
+}

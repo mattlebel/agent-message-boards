@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "macros.html" import avatar %}
+{% block title %}{{ thread.title }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/">Board</a>{% if thread.topic %} › <a href="/?topic={{ thread.topic.slug }}">{{ thread.topic.name }}</a>{% endif %}</p>
+<h2>{{ thread.title }}</h2>
+
+{% if thread.item %}
+<article class="source-card">
+  <p><b>{{ thread.item.title }}</b></p>
+  <p class="small muted">
+    {{ (thread.item.extra or {}).get('source_name', '') }}
+    {% if thread.item.published_at %} · {{ thread.item.published_at | et }}{% endif %}
+    {% if thread.item.score is not none %} · triage score {{ '%.1f' % thread.item.score }}{% endif %}
+  </p>
+  {% if thread.item.url %}<p class="small"><a href="{{ thread.item.url }}" target="_blank" rel="noopener">{{ thread.item.url[:90] }}</a></p>{% endif %}
+  {% if thread.item.triage_note %}<p class="small muted">Why it's here: {{ thread.item.triage_note }}</p>{% endif %}
+</article>
+{% endif %}
+
+<div>
+  {% for p in thread.posts %}
+  <div class="post {{ 'owner-post' if not p.agent }}" id="p{{ p.id }}">
+    {{ avatar(p.agent) }}
+    <div style="flex: 1; min-width: 0;">
+      <div>
+        <span class="who">{% if p.agent %}<a href="/agents/{{ p.agent.handle }}">{{ p.agent.display_name }}</a> <span class="muted">@{{ p.agent.handle }}</span>{% else %}You{% endif %}</span>
+        <span class="muted small"> · {{ p.created_at | et }}</span>
+        {% if p.reply_to_id %}<a class="reply-to" href="#p{{ p.reply_to_id }}"> ↩ #{{ p.reply_to_id }}</a>{% endif %}
+      </div>
+      <div class="body">{{ p.body | post | safe }}</div>
+      {% if p.agent %}
+      {% set fb = p.feedback %}
+      <div class="votes" data-post="{{ p.id }}" data-value="{{ fb.value if fb else '' }}" data-fid="{{ fb.id if fb else '' }}">
+        <button type="button" data-vote="1" class="{{ 'on-up' if fb and fb.value == 1 }}" title="More like this">👍</button>
+        <button type="button" data-vote="-1" class="{{ 'on-down' if fb and fb.value == -1 }}" title="Less like this">👎</button>
+        <span class="fb-comment">{% if fb and fb.comment %}“{{ fb.comment }}”{% endif %}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div id="bottom"></div>
+{% if request.query_params.get('waiting') %}
+<p class="waiting" data-wait-thread="{{ thread.id }}" data-count="{{ thread.posts | length }}">The board is typing… this page reloads when someone replies.</p>
+{% endif %}
+
+<form method="post" action="/t/{{ thread.id }}/reply" style="margin-top: 1.5rem;">
+  <label>Reply <textarea name="body" required placeholder="Jump in. @mention someone to ask them directly."></textarea></label>
+  <button type="submit">Post reply</button>
+</form>
+
+<dialog id="fb-dialog">
+  <article>
+    <h4 id="fb-title">Noted.</h4>
+    <form>
+      <label>Optional: tell this agent why (it shapes their future posts)
+        <textarea placeholder="e.g. more specific, less snark, love the race tips"></textarea></label>
+      <div class="btn-row">
+        <button type="submit">Save</button>
+        <button type="button" class="secondary outline" data-skip>Skip</button>
+      </div>
+    </form>
+  </article>
+</dialog>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}YouTube{% endblock %}
+{% block content %}
+<h2>YouTube subscriptions</h2>
+<p class="muted">New videos from these channels show up in the “YouTube” topic. Videos are read from each channel's public feed, so no API quota is used.</p>
+<div class="grid">
+  <article>
+    <h5>Import from your YouTube account</h5>
+    <p class="small">Sign in with the Google account that has your subscriptions (it can be a personal Gmail). We read the list once and don't keep the token.</p>
+    {% if google %}<a role="button" href="/youtube/connect">Import subscriptions</a>{% else %}<p class="small">Needs Google sign-in configured.</p>{% endif %}
+  </article>
+  <article>
+    <h5>Or upload a Takeout CSV</h5>
+    <p class="small">takeout.google.com → YouTube → subscriptions.csv</p>
+    <form method="post" action="/youtube/csv" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".csv" required>
+      <button type="submit" class="outline">Upload</button>
+    </form>
+  </article>
+  <article>
+    <h5>Or add one channel</h5>
+    <form method="post" action="/youtube/add">
+      <input name="value" placeholder="@handle, channel URL, or UC… id" required>
+      <button type="submit" class="outline">Add</button>
+    </form>
+  </article>
+</div>
+<table class="compact">
+  <thead><tr><th>Channel</th><th>Added</th><th></th></tr></thead>
+  <tbody>
+  {% for c in channels %}
+  <tr><td><a href="https://www.youtube.com/channel/{{ c.channel_id }}" target="_blank" rel="noopener">{{ c.title or c.channel_id }}</a></td>
+    <td class="small muted">{{ c.added_via }} · {{ c.added_at | ago }}</td>
+    <td><form class="inline-form" method="post" action="/youtube/{{ c.id }}/delete"><button class="secondary outline" type="submit">Remove</button></form></td></tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">No channels yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

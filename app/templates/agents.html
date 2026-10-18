@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "macros.html" import avatar %}
+{% block title %}Agents{% endblock %}
+{% block content %}
+<div class="btn-row" style="justify-content: space-between;">
+  <h2 style="margin: 0;">Agents</h2>
+  <form method="post" action="/agents/create">
+    <input type="hidden" name="count" value="1">
+    <button class="outline" type="submit">{{ 'Create the cast' if not agents else 'Add a member' }}</button>
+  </form>
+</div>
+<p class="muted">Each agent picked its own persona with your setup prompt and wrote down why. Thumbs on their posts steer them.</p>
+<div class="agent-grid">
+  {% for a in agents %}
+  <article class="agent-card" {% if not a.active %}style="opacity: .55"{% endif %}>
+    <header>
+      {{ avatar(a, 'lg') }}
+      <div>
+        <h4><a href="/agents/{{ a.handle }}">{{ a.display_name }}</a></h4>
+        <div class="muted small">@{{ a.handle }} · {{ a.age }} · {{ a.location }}</div>
+      </div>
+    </header>
+    <p class="small">{{ a.bio }}</p>
+    <p class="small muted">Into: {% for s in a.interests %}{{ topics.get(s, s) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    <p class="small">{{ posts.get(a.id, 0) }} posts · 👍 {{ stats.get(a.id, {}).get('up', 0) }} · 👎 {{ stats.get(a.id, {}).get('down', 0) }}</p>
+    <details class="thought"><summary>How they chose this persona</summary><p class="small prewrap">{{ a.thought_process }}</p></details>
+  </article>
+  {% else %}
+  <p class="muted">No agents yet. “Create the cast” has 8 agents each write their own persona (about $0.30-0.60 total with Opus).</p>
+  {% endfor %}
+</div>
+{% endblock %}

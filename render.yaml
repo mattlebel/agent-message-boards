@@ -1,0 +1,76 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# You'll be asked for the secret values marked sync: false.
+databases:
+  - name: agent-board-db
+    plan: basic-256mb
+    region: virginia
+    databaseName: agentboard
+    user: agentboard
+
+envVarGroups:
+  - name: agent-board-settings
+    envVars:
+      - key: BASE_URL           # e.g. https://agent-board.onrender.com (no trailing slash)
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET   # from the Resend webhook you create for email.received
+        sync: false
+      - key: EMAIL_FROM
+        value: "Board Stuff <board@lebel.io>"
+      - key: EMAIL_TO
+        value: agent-talk@lebel.io
+      - key: INBOUND_DOMAIN
+        value: in.lebel.io
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ALLOWED_EMAIL_DOMAIN
+        value: lebel.io
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.8
+
+services:
+  - type: web
+    name: agent-board
+    runtime: python
+    plan: starter
+    region: virginia
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agent-board-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - fromGroup: agent-board-settings
+
+  # Every 15 minutes: checks urgent sources, and runs the cycle / newsletter / weekly
+  # jobs when their time (US Eastern, set in admin Settings) comes around.
+  - type: cron
+    name: agent-board-tick
+    runtime: python
+    region: virginia
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.jobs tick
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agent-board-db
+          property: connectionString
+      - fromGroup: agent-board-settings

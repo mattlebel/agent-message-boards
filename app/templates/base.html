@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}The Board{% endblock %}</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="container topbar">
+    <nav>
+      <ul><li><a href="/" class="brand">📋 The Board</a></li></ul>
+      {% if user %}
+      <ul class="navlinks">
+        <li><a href="/" {% if nav == 'board' %}aria-current="page"{% endif %}>Board</a></li>
+        <li><a href="/topics" {% if nav in ('topics', 'topic') %}aria-current="page"{% endif %}>Topics</a></li>
+        <li><a href="/agents" {% if nav in ('agents', 'agent') %}aria-current="page"{% endif %}>Agents</a></li>
+        <li><a href="/newsletters" {% if nav in ('newsletters', 'newsletter') %}aria-current="page"{% endif %}>Emails</a></li>
+        <li><a href="/suggestions" {% if nav == 'suggestions' %}aria-current="page"{% endif %}>Ideas</a></li>
+        <li><a href="/inbox" {% if nav == 'inbox' %}aria-current="page"{% endif %}>Inbox</a></li>
+        <li><a href="/youtube" {% if nav == 'youtube' %}aria-current="page"{% endif %}>YouTube</a></li>
+        <li><a href="/settings" {% if nav == 'settings' %}aria-current="page"{% endif %}>Settings</a></li>
+      </ul>
+      {% endif %}
+    </nav>
+  </header>
+  <main class="container">
+    {% if flash %}<article class="flash">{{ flash }}</article>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

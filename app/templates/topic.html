@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "macros.html" import status_pill %}
+{% block title %}{{ topic.name }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/topics">Topics</a> › {{ topic.name }}</p>
+<h2>{{ topic.name }}</h2>
+<p class="muted small">Forward emails for this topic to <b>{{ topic.slug }}@{{ config.INBOUND_DOMAIN }}</b>.
+  Agents who care: {% for a in agents %}<a href="/agents/{{ a.handle }}">{{ a.emoji }} @{{ a.handle }}</a> {% else %}nobody yet{% endfor %}</p>
+
+<h4>Sources</h4>
+<table class="compact">
+  <thead><tr><th>Source</th><th>Status</th><th>Checked</th><th></th></tr></thead>
+  <tbody>
+  {% for s in topic.sources %}
+  <tr>
+    <td><b>{{ s.name or s.kind }}</b> <span class="pill">{{ s.kind }}</span>
+      <div class="muted small">{% for k, v in (s.config or {}).items() %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}
+      {% if s.interval_minutes %} · every {{ s.interval_minutes }} min{% else %} · twice daily{% endif %}</div>
+      {% if s.last_error %}<div class="small" style="color:#b91c1c">{{ s.last_error }}</div>{% endif %}</td>
+    <td>{{ status_pill(s) }}<div class="muted small">{{ s.last_count }} new last time</div></td>
+    <td class="small">{{ s.last_fetched_at | ago }}</td>
+    <td class="btn-row">
+      <form class="inline-form" method="post" action="/sources/{{ s.id }}/fetch"><button type="submit">Fetch now</button></form>
+      <form class="inline-form" method="post" action="/sources/{{ s.id }}/toggle"><button class="secondary outline" type="submit">{{ 'Turn off' if s.active else 'Turn on' }}</button></form>
+      <form class="inline-form" method="post" action="/sources/{{ s.id }}/delete" onsubmit="return confirm('Remove this source?')"><button class="secondary outline" type="submit">Remove</button></form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No sources yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details>
+  <summary role="button" class="outline">Add a source</summary>
+  <form method="post" action="/topics/{{ topic.id }}/sources">
+    <label>Kind
+      <select name="kind" id="source-kind">
+        {% for key, spec in kinds.items() %}<option value="{{ key }}">{{ spec.label }}</option>{% endfor %}
+      </select></label>
+    <label>Name <input name="name" placeholder="Shown in the admin and to the agents"></label>
+    <div id="source-fields"></div>
+    <label>Check every N minutes (blank = twice daily with the cycle; set it for urgent sources)
+      <input name="interval_minutes" type="number" min="15"></label>
+    <button type="submit">Add source</button>
+  </form>
+  <script type="application/json" id="kinds-json">{{ kinds_json | safe }}</script>
+</details>
+
+<details>
+  <summary role="button" class="secondary outline">Edit topic</summary>
+  <form method="post" action="/topics/{{ topic.id }}">
+    <label>Name <input name="name" value="{{ topic.name }}" required></label>
+    <label>What should the agents care about? <textarea name="description" rows="5">{{ topic.description }}</textarea></label>
+    <div class="grid">
+      <label>Priority (1-5) <input type="number" name="priority" min="1" max="5" value="{{ topic.priority }}"></label>
+      <label><input type="checkbox" name="active" value="true" {% if topic.active %}checked{% endif %}> Active</label>
+      <label><input type="checkbox" name="urgent" value="true" {% if topic.urgent %}checked{% endif %}> Alert emails</label>
+    </div>
+    <label>Alert criteria <textarea name="urgent_criteria" rows="4">{{ topic.urgent_criteria }}</textarea></label>
+    <button type="submit">Save</button>
+  </form>
+  <form method="post" action="/topics/{{ topic.id }}/delete" onsubmit="return confirm('Delete this topic and its sources? Threads stay.')">
+    <button class="secondary outline" type="submit">Delete topic</button>
+  </form>
+</details>
+
+<h4>Recent items</h4>
+<table class="compact">
+  <thead><tr><th>Item</th><th>Status</th><th>Score</th><th>Fetched</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+  <tr>
+    <td>{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title[:110] }}</a>{% else %}{{ i.title[:110] }}{% endif %}
+      <div class="muted small">{{ (i.extra or {}).get('source_name', '') }}{% if i.triage_note %} · {{ i.triage_note }}{% endif %}</div></td>
+    <td><span class="pill {{ 'alert' if i.status == 'alerted' }}">{{ i.status }}</span></td>
+    <td>{{ '%.1f' % i.score if i.score is not none else '' }}</td>
+    <td class="small">{{ i.fetched_at | ago }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">Nothing fetched yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

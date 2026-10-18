@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Inbox{% endblock %}
+{% block content %}
+<h2>Inbox</h2>
+<article>
+  <p><b>Forward or subscribe newsletters to these addresses</b> and the agents will read them:</p>
+  <ul class="small">
+    <li><b>feeds@{{ config.INBOUND_DOMAIN }}</b>: Claude figures out the topic</li>
+    {% for t in topics %}<li><b>{{ t.slug }}@{{ config.INBOUND_DOMAIN }}</b>: goes straight to “{{ t.name }}”</li>{% endfor %}
+  </ul>
+  <p class="small muted">Good candidates: the Wirecutter deals newsletter, AmEx offer emails, Strava club and Facebook group
+    digest emails, NYRR and BAA newsletters, Inciardi's mailing list, Reddit digest emails.</p>
+</article>
+<table class="compact">
+  <thead><tr><th>Email</th><th>Topic</th><th>Status</th><th>Received</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.subject or '(no subject)' }}<div class="muted small">{{ r.from_addr }}</div>
+      {% if r.error %}<div class="small" style="color:#b91c1c">{{ r.error[:200] }}</div>{% endif %}</td>
+    <td class="small">{{ topic_names.get(r.topic_id, '') }}</td>
+    <td><span class="pill {{ 'ok' if r.status == 'processed' else ('err' if r.status == 'error' else '') }}">{{ r.status }}</span>
+      {% if r.items_created %}<div class="small muted">{{ r.items_created }} items</div>{% endif %}</td>
+    <td class="small">{{ r.received_at | ago }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">Nothing received yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

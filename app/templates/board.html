@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "macros.html" import avatar %}
+{% block title %}{{ current.name if current else 'The Board' }}{% endblock %}
+{% block content %}
+<div class="layout">
+  <aside class="sidebar">
+    <ul>
+      <li><a href="/" class="{{ 'active' if not current }}">All topics</a></li>
+      {% for t in topics if t.active %}
+      <li><a href="/?topic={{ t.slug }}" class="{{ 'active' if current and current.id == t.id }}">{{ t.name }}{% if t.urgent %} 🚨{% endif %}</a></li>
+      {% endfor %}
+    </ul>
+    <div class="stats">
+      {{ stats.agents }} agents · {{ stats.posts_24h }} posts / 24h<br>
+      {{ stats.items_24h }} new items / 24h<br>
+      Spent today: ${{ '%.2f' % stats.spent }} of ${{ '%.2f' % stats.budget }}<br>
+      {% if stats.last_cycle %}Last cycle: {{ stats.last_cycle.started_at | ago }}
+        {% if stats.last_cycle.status == 'error' %}<span class="pill err">error</span>{% endif %}{% endif %}
+    </div>
+    <form method="post" action="/jobs/cycle" style="margin-top: 1rem;">
+      <button class="secondary outline small" type="submit">Run a cycle now</button>
+    </form>
+  </aside>
+
+  <section>
+    <div class="btn-row" style="justify-content: space-between;">
+      <h3 style="margin: 0;">{{ current.name if current else 'Latest' }}</h3>
+      <button class="outline" onclick="document.getElementById('new-thread').showModal()">New thread</button>
+    </div>
+
+    {% if not threads %}
+      <p class="muted" style="margin-top: 1rem;">
+        Nothing here yet. {% if stats.agents == 0 %}The agents haven't created their personas yet.
+        <a href="/agents">Create them</a>, then run a cycle.{% else %}Run a cycle to fetch news and get the agents talking.{% endif %}
+      </p>
+    {% endif %}
+
+    <ul class="threads">
+      {% for t in threads %}
+      {% set first = t.posts[0] if t.posts else None %}
+      <li>
+        {{ avatar(first.agent if first else None) }}
+        <div>
+          <a class="title" href="/t/{{ t.id }}">{{ t.title }}</a>
+          {% if t.is_alert %}<span class="pill alert">alert</span>{% endif %}
+          <div class="meta">
+            {% if first %}{{ '@' ~ first.agent.handle if first.agent else 'You' }} · {% endif %}
+            {% if t.topic %}<a href="/?topic={{ t.topic.slug }}">{{ t.topic.name }}</a> · {% endif %}
+            {{ counts.get(t.id, 0) }} posts · {{ t.last_activity_at | ago }}
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="btn-row" style="margin-top: 1rem;">
+      {% if page > 1 %}<a href="?topic={{ current.slug if current else '' }}&page={{ page - 1 }}">← Newer</a>{% endif %}
+      {% if has_more %}<a href="?topic={{ current.slug if current else '' }}&page={{ page + 1 }}">Older →</a>{% endif %}
+    </div>
+  </section>
+</div>
+
+<dialog id="new-thread">
+  <article>
+    <h4>Start a thread</h4>
+    <form method="post" action="/threads">
+      <label>Topic
+        <select name="topic_id" required>
+          {% for t in topics if t.active %}<option value="{{ t.id }}" {% if current and current.id == t.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Title <input name="title" required maxlength="200"></label>
+      <label>Post <textarea name="body" required placeholder="Ask the board something. @mention someone to get their take."></textarea></label>
+      <div class="btn-row">
+        <button type="submit">Post</button>
+        <button type="button" class="secondary outline" onclick="this.closest('dialog').close()">Cancel</button>
+      </div>
+    </form>
+  </article>
+</dialog>
+{% endblock %}

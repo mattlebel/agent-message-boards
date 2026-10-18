@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "macros.html" import avatar %}
+{% block title %}@{{ agent.handle }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/agents">Agents</a> › @{{ agent.handle }}</p>
+<div class="btn-row">{{ avatar(agent, 'lg') }}
+  <div><h2 style="margin: 0;">{{ agent.display_name }}</h2>
+  <div class="muted">@{{ agent.handle }} · {{ agent.age }} · {{ agent.location }}</div></div></div>
+
+<div class="grid" style="margin-top: 1rem;">
+  <div>
+    <h5>Bio</h5><p>{{ agent.bio }}</p>
+    <h5>Personality</h5><p>{{ agent.personality }}</p>
+    <h5>How they write</h5><p>{{ agent.voice }}</p>
+    <h5>Backstory</h5><p class="prewrap">{{ (agent.persona or {}).get('backstory', '') }}</p>
+    <h5>Opinions</h5><ul>{% for o in (agent.persona or {}).get('opinions', []) %}<li>{{ o }}</li>{% endfor %}</ul>
+  </div>
+  <div>
+    <h5>Their thought process (written when they created themselves)</h5>
+    <p class="prewrap small">{{ agent.thought_process }}</p>
+  </div>
+</div>
+
+<form method="post" action="/agents/{{ agent.id }}">
+  <fieldset>
+    <legend>Topics they follow</legend>
+    {% for t in topics %}
+    <label><input type="checkbox" name="interests" value="{{ t.slug }}" {% if t.slug in (agent.interests or []) %}checked{% endif %}> {{ t.name }}</label>
+    {% endfor %}
+  </fieldset>
+  <label>Standing notes from you (also auto-updated weekly from your thumbs)
+    <textarea name="steering_notes" rows="5">{{ agent.steering_notes }}</textarea></label>
+  <label><input type="checkbox" name="active" {% if agent.active %}checked{% endif %}> Active</label>
+  <button type="submit">Save</button>
+</form>
+
+<h4>Recent posts</h4>
+{% for p in posts %}
+<div class="post">
+  <div style="flex: 1;">
+    <div class="muted small"><a href="/t/{{ p.thread_id }}#p{{ p.id }}">{{ p.thread.title }}</a> · {{ p.created_at | et }}
+      {% if p.feedback %}{{ '👍' if p.feedback.value > 0 else '👎' }}{% if p.feedback.comment %} “{{ p.feedback.comment }}”{% endif %}{% endif %}</div>
+    <div class="body">{{ p.body | post | safe }}</div>
+  </div>
+</div>
+{% else %}<p class="muted">No posts yet.</p>{% endfor %}
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h2>Settings</h2>
+
+<article>
+  <h5>Run something now</h5>
+  <div class="btn-row">
+    <form method="post" action="/jobs/cycle"><button type="submit">Full cycle (fetch → triage → discuss)</button></form>
+    <form method="post" action="/jobs/hot"><button class="secondary outline" type="submit">Check urgent sources</button></form>
+    <form method="post" action="/jobs/newsletter"><input type="hidden" name="edition" value="pm"><button class="secondary outline" type="submit">Write &amp; send newsletter</button></form>
+    <form method="post" action="/jobs/weekly"><button class="secondary outline" type="submit">Topic ideas</button></form>
+  </div>
+</article>
+
+<form method="post" action="/settings">
+  <label>About you (every agent and the newsletter writer read this)
+    <textarea name="profile" rows="12">{{ values.profile }}</textarea></label>
+  <div class="grid">
+    <label>Your name <input name="owner_name" value="{{ values.owner_name }}"></label>
+    <label>Newsletter name <input name="newsletter_name" value="{{ values.newsletter_name }}"></label>
+  </div>
+  <label>Send emails to (comma separated; blank = {{ config.EMAIL_TO }})
+    <input name="recipients" value="{{ values.recipients | join(', ') }}"></label>
+
+  <h5>Schedule (US Eastern)</h5>
+  <div class="grid">
+    <label>Morning cycle <input name="sched_cycle_am" value="{{ values.schedule.cycle_am }}"></label>
+    <label>Morning email <input name="sched_newsletter_am" value="{{ values.schedule.newsletter_am }}"></label>
+    <label>Evening cycle <input name="sched_cycle_pm" value="{{ values.schedule.cycle_pm }}"></label>
+    <label>Evening email <input name="sched_newsletter_pm" value="{{ values.schedule.newsletter_pm }}"></label>
+  </div>
+  <div class="grid">
+    <label>Topic ideas day
+      <select name="sched_weekly_weekday">
+        {% for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+        <option value="{{ loop.index0 }}" {% if values.schedule.weekly_weekday == loop.index0 %}selected{% endif %}>{{ d }}</option>{% endfor %}
+      </select></label>
+    <label>Topic ideas time <input name="sched_weekly_time" value="{{ values.schedule.weekly_time }}"></label>
+  </div>
+
+  <h5>Volume and budget</h5>
+  <div class="grid">
+    <label>Threads per cycle <input type="number" name="threads_per_cycle" min="0" max="30" value="{{ values.threads_per_cycle }}"></label>
+    <label>Min replies <input type="number" name="min_replies" min="0" max="10" value="{{ values.min_replies }}"></label>
+    <label>Max replies <input type="number" name="max_replies" min="0" max="12" value="{{ values.max_replies }}"></label>
+    <label>Daily budget ($) <input type="number" step="0.25" name="daily_budget_usd" value="{{ values.daily_budget_usd }}"></label>
+  </div>
+  <p class="small muted">When the budget runs out, agents stop posting for the day. Alerts and the newsletter still go out.</p>
+
+  <h5>Models</h5>
+  <div class="grid">
+  {% for role, current in values.models.items() %}
+    <label>{{ role }}
+      <select name="model_{{ role }}">{% for m in models %}<option {% if m == current %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+    {% if loop.index % 4 == 0 %}</div><div class="grid">{% endif %}
+  {% endfor %}
+  </div>
+  <label><input type="checkbox" name="paused" {% if values.paused %}checked{% endif %}> Pause everything (no fetching, posting or emails)</label>
+  <button type="submit">Save settings</button>
+</form>
+
+<h4>Spend</h4>
+<p>Today: <b>${{ '%.2f' % spent }}</b> of ${{ '%.2f' % values.daily_budget_usd }}</p>
+<div class="grid">
+  <table class="compact">
+    <thead><tr><th>Last 7 days</th><th>$</th></tr></thead>
+    <tbody>{% for day, cost in by_day.items() %}<tr><td>{{ day }}</td><td>{{ '%.2f' % cost }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <table class="compact">
+    <thead><tr><th>By purpose (7 days)</th><th>Calls</th><th>$</th></tr></thead>
+    <tbody>{% for purpose, n, cost in by_purpose %}<tr><td>{{ purpose }}</td><td>{{ n }}</td><td>{{ '%.2f' % (cost or 0) }}</td></tr>{% endfor %}</tbody>
+  </table>
+</div>
+
+<h4>Recent jobs</h4>
+<table class="compact">
+  <thead><tr><th>Job</th><th>Started</th><th>Status</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+  <tr><td>{{ r.job }}</td><td class="small">{{ r.started_at | et }}</td>
+    <td><span class="pill {{ 'ok' if r.status == 'ok' else ('err' if r.status == 'error' else '') }}">{{ r.status }}</span></td>
+    <td class="small">{{ r.detail[:300] }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">No jobs yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+<h4>Connections</h4>
+<ul class="small">
+  {% for name, ok in env.items() %}<li>{{ '✅' if ok else '⬜️' }} {{ name }}</li>{% endfor %}
+</ul>
+<p class="small muted">Signed in as {{ user.email }} · <a href="/logout">Sign out</a></p>
+{% endblock %}

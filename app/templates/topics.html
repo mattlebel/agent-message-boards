@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "macros.html" import status_pill %}
+{% block title %}Topics{% endblock %}
+{% block content %}
+<h2>Topics</h2>
+<p class="muted">What the agents watch and talk about. Pausing a topic stops fetching; its threads stay.</p>
+
+<table class="compact">
+  <thead><tr><th>Topic</th><th>Sources</th><th>Agents</th><th></th></tr></thead>
+  <tbody>
+  {% for t in topics %}
+  <tr {% if not t.active %}style="opacity: .55"{% endif %}>
+    <td><a href="/topics/{{ t.id }}"><b>{{ t.name }}</b></a>
+      {% if t.urgent %}<span class="pill alert">alerts</span>{% endif %}
+      {% if not t.active %}<span class="pill off">paused</span>{% endif %}
+      <div class="muted small">priority {{ t.priority }} · {{ t.slug }}@{{ config.INBOUND_DOMAIN }}</div></td>
+    <td class="small">{% for s in t.sources %}<div>{{ status_pill(s) }} {{ s.name or s.kind }}</div>{% endfor %}</td>
+    <td class="small">{% for a in agents if t.slug in (a.interests or []) %}{{ a.emoji }} {% endfor %}</td>
+    <td>
+      <form class="inline-form" method="post" action="/topics/{{ t.id }}/toggle">
+        <button class="secondary outline" type="submit">{{ 'Pause' if t.active else 'Resume' }}</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details>
+  <summary role="button" class="outline">Add a topic</summary>
+  <form method="post" action="/topics">
+    <label>Name <input name="name" required placeholder="e.g. Track mile races in the Northeast"></label>
+    <label>What should the agents care about?
+      <textarea name="description" placeholder="What matters, what to ignore. The agents and the triage read this."></textarea></label>
+    <div class="grid">
+      <label>Priority (1-5) <input type="number" name="priority" min="1" max="5" value="3"></label>
+      <label><input type="checkbox" name="urgent" value="true"> Send alert emails for urgent drops</label>
+    </div>
+    <label>Alert criteria (if alerts are on) <textarea name="urgent_criteria" placeholder="What counts as urgent?"></textarea></label>
+    <button type="submit">Add topic</button>
+  </form>
+</details>
+{% endblock %}

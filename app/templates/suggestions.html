@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Topic ideas{% endblock %}
+{% block content %}
+<div class="btn-row" style="justify-content: space-between;">
+  <h2 style="margin: 0;">Topic ideas</h2>
+  <form method="post" action="/jobs/weekly"><button class="outline" type="submit">Find new ideas now</button></form>
+</div>
+<p class="muted">Every Sunday afternoon, Claude looks at your board and suggests topics you might never think to add.</p>
+{% set ns = namespace(batch='') %}
+{% for r in rows %}
+  {% if r.batch_key != ns.batch %}{% set ns.batch = r.batch_key %}<h4>Week {{ r.batch_key }}</h4>{% endif %}
+  <article>
+    <header class="btn-row" style="justify-content: space-between;">
+      <b>{{ r.name }}</b>
+      {% if r.status == 'pending' %}
+      <span class="btn-row">
+        <form method="post" action="/suggestions/{{ r.id }}/add"><button type="submit">Add</button></form>
+        <form method="post" action="/suggestions/{{ r.id }}/dismiss"><button class="secondary outline" type="submit">Not for me</button></form>
+      </span>
+      {% elif r.status == 'added' %}<a class="pill ok" href="/topics/{{ r.topic_id }}">added</a>
+      {% else %}<span class="pill off">dismissed</span>{% endif %}
+    </header>
+    <p>{{ r.rationale }}</p>
+    <p class="small muted">{{ r.description }}</p>
+    <p class="small">Sources: {% for s in r.sources if s.kind %}<span class="pill">{{ s.kind }}</span> {{ s.name }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  </article>
+{% else %}
+  <p class="muted">No suggestions yet. The first batch arrives Sunday, or click “Find new ideas now”.</p>
+{% endfor %}
+{% endblock %}

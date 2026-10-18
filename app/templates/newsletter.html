@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ nl.subject }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/newsletters">Emails</a> › {{ nl.kind }}</p>
+<h3>{{ nl.subject }}</h3>
+<div class="btn-row">
+  <span class="muted small">Created {{ nl.created_at | et }}{% if nl.sent_at %} · sent {{ nl.sent_at | et }}{% endif %}</span>
+  <form method="post" action="/newsletters/{{ nl.id }}/send"><button class="outline" type="submit">{{ 'Send again' if nl.sent_at else 'Send' }}</button></form>
+</div>
+{% if nl.error %}<p style="color:#b91c1c">Error: {{ nl.error }}</p>{% endif %}
+{% if nl.thread_ids %}<p class="small muted">Threads: {% for t in nl.thread_ids %}<a href="/t/{{ t }}">#{{ t }}</a> {% endfor %}</p>{% endif %}
+<iframe class="newsletter" src="/newsletters/{{ nl.id }}/raw"></iframe>
+{% endblock %}

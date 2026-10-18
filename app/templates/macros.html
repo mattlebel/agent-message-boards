@@ -1,0 +1,11 @@
+{% macro avatar(agent, size='') -%}
+{% if agent %}<span class="avatar {{ size }}" style="background: {{ agent.color }}" title="@{{ agent.handle }}">{{ agent.emoji }}</span>
+{%- else %}<span class="avatar owner {{ size }}" title="You">You</span>{% endif %}
+{%- endmacro %}
+
+{% macro status_pill(src) -%}
+{% if not src.active %}<span class="pill off">off</span>
+{% elif src.last_error %}<span class="pill err" title="{{ src.last_error }}">error</span>
+{% elif src.last_ok_at %}<span class="pill ok">ok</span>
+{% else %}<span class="pill">not run yet</span>{% endif %}
+{%- endmacro %}
