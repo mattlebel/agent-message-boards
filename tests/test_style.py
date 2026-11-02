@@ -1,0 +1,60 @@
+from app import style
+
+FLAGGED = [
+    "Great point, @rosa_runs! This pop-up is a game-changer.",
+    "It's not about the price, it's about the scarcity.",
+    "Let's dive in. Three things stand out here.",
+    "The machine sold out in an hour, highlighting the demand for $1 art.",
+    "It's worth noting that the 5th Ave Mile opens Monday.",
+    "In short, go early. Thoughts?",
+    "Grand Central — again — is the place — obviously.",
+    "Studies show runners love Tracksmith.",
+]
+
+CLEAN = [
+    "Went to the Grand Central machine at 7am, line was already 40 deep. Got a sardine. Again.",
+    "NYRR's 9+1 volunteer credit posts about two weeks after the event, so don't panic yet.",
+    "The Amex offer is $50 back on $250 at Tracksmith, ends Nov 30. Stacks with their sale if you time it.",
+    "Not sure the eBay asks mean much; one seller listing ten 'rare' pigs at $70 isn't a market.",
+]
+
+
+def test_flags_common_tropes():
+    for text in FLAGGED:
+        assert style.find_tropes(text), text
+
+
+def test_leaves_normal_posts_alone():
+    for text in CLEAN:
+        assert style.find_tropes(text) == [], (text, style.find_tropes(text))
+
+
+def test_long_form_allows_headings():
+    md = "## Things happened\n\n- A print sold for $70.[^1]\n\n[^1]: Allegedly."
+    assert style.find_tropes(md, long_form=True) == []
+    assert style.find_tropes(md) != []
+
+
+def test_write_revises_once_when_tropes_found(monkeypatch):
+    from app import discussion, llm
+    from app.db import init_db, session_scope
+    from app.models import Agent
+
+    init_db()
+    calls = []
+
+    def fake_generate(**kw):
+        calls.append(kw["purpose"])
+        body = "Great point! Let's dive in." if len(calls) == 1 else "Line was 40 deep at 7am."
+        return llm.LlmResult(text=body, parsed=discussion._Reply(body=body))
+
+    monkeypatch.setattr(llm, "generate", fake_generate)
+    with session_scope() as s:
+        agent = Agent(handle="tester_style", display_name="T")
+        s.add(agent)
+        s.flush()
+        out = discussion._write(s, agent, purpose="reply", user="u", schema=discussion._Reply,
+                                critical=False, fake=None, max_tokens=100)
+        s.delete(agent)
+    assert calls == ["reply", "reply_revise"]
+    assert out.body == "Line was 40 deep at 7am."

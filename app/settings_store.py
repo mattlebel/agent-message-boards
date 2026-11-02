@@ -47,6 +47,7 @@ DEFAULTS: dict[str, Any] = {
         "weekly_time": "15:00",
     },
     "recipients": [],  # empty = EMAIL_TO env var
+    "style_guide": "",  # empty = built-in anti-"LLM speak" rules in app/style.py
     "paused": False,
 }
 

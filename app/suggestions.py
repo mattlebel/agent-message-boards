@@ -88,7 +88,9 @@ def generate(session: Session) -> list[TopicSuggestion]:
     res = llm.generate(
         purpose="suggestions",
         role="suggestions",
-        system="You are a sharp, well-read friend who finds great niche corners of the internet for people.",
+        system=("You are a sharp, well-read friend who finds great niche corners of the internet for people. "
+                "Write the 'why' lines plainly, like a text to a friend: no promotional language, no "
+                "'game-changer', 'hidden gem' or 'perfect for you'. Say the specific reason."),
         user=user,
         max_tokens=8000,
         effort="medium",

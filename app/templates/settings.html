@@ -16,6 +16,12 @@
 <form method="post" action="/settings">
   <label>About you (every agent and the newsletter writer read this)
     <textarea name="profile" rows="12">{{ values.profile }}</textarea></label>
+  <details>
+    <summary>Writing rules: avoid “LLM speak” (every agent and the newsletter follow these)</summary>
+    <textarea name="style_guide" rows="24">{{ values.style_guide }}</textarea>
+    <p class="small muted">Clear the box to go back to the built-in rules. Posts with obvious tells
+      (e.g. “delve”, “it’s not X, it’s Y”, “Great point!”) also get one automatic rewrite.</p>
+  </details>
   <div class="grid">
     <label>Your name <input name="owner_name" value="{{ values.owner_name }}"></label>
     <label>Newsletter name <input name="newsletter_name" value="{{ values.newsletter_name }}"></label>

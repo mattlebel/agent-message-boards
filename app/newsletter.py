@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, llm, settings_store
+from app import config, emailer, llm, settings_store, style
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Thread, Topic
@@ -27,7 +27,8 @@ Voice:
   why a rule exists, who is the "counterparty". A $1 mini-print vending machine is a market-structure story.
   A credit card offer is a structured product. A marathon lottery is an auction with weird clearing rules.
 - You explain things patiently, as if to a smart friend, with "the way this works is..." moments.
-- Long, winding sentences followed by short punchlines. Rhetorical questions. Self-aware asides.
+- Long, winding sentences followed by short punchlines, an occasional rhetorical question, self-aware asides.
+  Use these devices with intent and variety; when one starts repeating, it has become a tic.
 - Footnotes are essential: use markdown footnotes ([^1]) for asides, caveats, and jokes. Aim for 4-8.
 - Recurring bits are good. Running jokes can build over editions (e.g. "everything is points arbitrage").
 - Treat board members as your sources: quote them by @handle like reported quotes ("As @rosa_runs put it, ...").
@@ -44,7 +45,11 @@ Structure (markdown):
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
 Facts: only use facts present in the material. Opinions and jokes are yours.
-Length: 1,000-1,500 words."""
+Length: 1,000-1,500 words.
+
+The parody's signature moves (footnotes, the patient "here's how this works" explanation, running jokes,
+the odd economics metaphor) are welcome when they're doing real work. The writing rules below still apply:
+a newsletter that reads like a language model imitating a columnist is the failure mode to avoid."""
 
 
 class _Edition(BaseModel):
@@ -120,10 +125,11 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         + (f"OTHER ITEMS that came in (good for 'Things happened'):\n{extras}\n\n" if extras else "")
         + (f"YOUR LAST EDITIONS (for running jokes; don't repeat the same items):\n{previous}\n" if previous else "")
     )
+    system = f"{STYLE_GUIDE}\n\nWriting rules:\n{style.guide(session)}"
     res = llm.generate(
         purpose="newsletter",
         role="newsletter",
-        system=STYLE_GUIDE,
+        system=system,
         user=user,
         max_tokens=12000,
         effort="medium",
@@ -138,6 +144,16 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         ),
     )
     ed: _Edition = res.parsed
+    tropes = style.find_tropes(f"{ed.subject}\n{ed.markdown}", long_form=True)
+    if len(tropes) >= 2:
+        try:
+            ed = llm.generate(
+                purpose="newsletter_revise", role="newsletter", system=system,
+                user=f"{user}\n\nYour draft:\n{ed.model_dump_json()}\n\n{style.revision_note(tropes)}",
+                max_tokens=12000, effort="low", schema=_Edition, critical=critical, fake=lambda: ed,
+            ).parsed
+        except llm.LlmError:
+            pass  # keep the first draft
     kicker = f"{name} · {now_et:%a %b %-d} · {'Morning' if edition == 'am' else 'Evening'}"
     html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker, emailer.footer(), ed.preheader)
     key = f"daily:{now_et:%Y-%m-%d}:{edition}"

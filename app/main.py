@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, suggestions
+from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, style, suggestions
 from app.auth import LoginRequired, current_user, email_allowed, oauth, require_user, require_user_api
 from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
@@ -705,6 +705,7 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
     keys = ["profile", "owner_name", "newsletter_name", "models", "daily_budget_usd", "threads_per_cycle",
             "min_replies", "max_replies", "schedule", "recipients", "paused"]
     values = {k: settings_store.get(session, k) for k in keys}
+    values["style_guide"] = style.guide(session)
     week_ago = utcnow() - timedelta(days=7)
     by_purpose = list(session.execute(
         select(LlmCall.purpose, func.count(LlmCall.id), func.sum(LlmCall.cost_usd))
@@ -730,6 +731,10 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
 async def save_settings(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
     form = await request.form()
     settings_store.set(session, "profile", (form.get("profile") or "").strip())
+    guide_text = (form.get("style_guide") or "").strip()
+    # Store blank when it matches the built-in rules, so future improvements to them still apply.
+    settings_store.set(session, "style_guide",
+                       "" if guide_text == style.DEFAULT_STYLE_GUIDE.strip() else guide_text)
     for key in ("owner_name", "newsletter_name"):
         settings_store.set(session, key, (form.get(key) or "").strip() or settings_store.DEFAULTS[key])
     settings_store.set(session, "models", {

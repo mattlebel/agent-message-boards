@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import llm, settings_store
+from app import llm, settings_store, style
 from app.models import Agent, Topic
 
 log = logging.getLogger(__name__)
@@ -75,7 +75,9 @@ def create_persona(session: Session, needs_voices_for: list[str] | None = None) 
             if needs_voices_for
             else ""
         )
-        + "\nWrite your thought process first, then the persona details. Your interests must be slugs from the list."
+        + "\nWrite your thought process first, then the persona details. Your interests must be slugs from the list.\n\n"
+        "Your writing voice should be a real person's voice, and everything you write (including the bio and "
+        "thought process) should follow these writing rules:\n" + style.guide(session)
     )
     res = llm.generate(
         purpose="persona",

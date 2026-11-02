@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import config, llm, settings_store
+from app import config, llm, settings_store, style
 from app.db import utcnow
 from app.models import Agent, Feedback, Item, Post, Thread, Topic
 from app.sources.feeds import reddit_top_comments
@@ -95,6 +95,9 @@ How to post:
   (e.g. a race {owner} should sign up for, a deal worth grabbing, a trip worth taking).
 - Plain text, light markdown at most. Emoji only if it fits how you write.
 
+Writing rules (these apply to every post):
+{style.guide(session)}
+
 {steering}""".strip()
 
 
@@ -132,6 +135,28 @@ class _Opening(BaseModel):
 class _Reply(BaseModel):
     reply_to_post_id: Optional[int] = Field(default=None, description="The #id you're responding to, if any")
     body: str
+
+
+def _write(session: Session, agent: Agent, *, purpose: str, user: str, schema, critical: bool, fake,
+           max_tokens: int):
+    """Draft a post; if it has obvious machine-writing tells, ask the same agent for one revision."""
+    system = agent_system(session, agent)
+    res = llm.generate(purpose=purpose, role="posts", system=system, user=user, max_tokens=max_tokens,
+                       effort="low", schema=schema, critical=critical, fake=fake)
+    draft = res.parsed
+    text = " ".join(str(v) for v in draft.model_dump().values() if isinstance(v, str))
+    tropes = style.find_tropes(text)
+    if not tropes:
+        return draft
+    try:
+        res2 = llm.generate(
+            purpose=f"{purpose}_revise", role="posts", system=system,
+            user=f"{user}\n\nYour draft:\n{draft.model_dump_json()}\n\n{style.revision_note(tropes)}",
+            max_tokens=max_tokens, effort="low", schema=schema, critical=critical, fake=lambda: draft,
+        )
+        return res2.parsed
+    except (llm.BudgetExceeded, llm.LlmError):
+        return draft
 
 
 # --- choosing who talks ------------------------------------------------------------
@@ -206,24 +231,17 @@ def start_thread(session: Session, item: Item, critical: bool = False, alert: bo
         + "Share it with the board: what it is, the link, and your honest take. "
         + recent_posts_by(session, agent)
     )
-    res = llm.generate(
-        purpose="thread_start",
-        role="posts",
-        system=agent_system(session, agent),
-        user=user,
-        max_tokens=2500,
-        effort="low",
-        schema=_Opening,
-        critical=critical,
-        fake=lambda: _Opening(title=item.title[:80], body=f"(fake) Check this out: {item.url}\n\nThoughts?"),
+    opening = _write(
+        session, agent, purpose="thread_start", user=user, schema=_Opening, critical=critical, max_tokens=2500,
+        fake=lambda: _Opening(title=item.title[:80], body=f"(fake) Check this out: {item.url}"),
     )
-    title = res.parsed.title.strip()[:200]
+    title = opening.title.strip()[:200]
     if alert and not title.startswith("🚨"):
         title = "🚨 " + title
     thread = Thread(topic_id=topic.id, item_id=item.id, title=title, is_alert=alert)
     session.add(thread)
     session.flush()
-    _post(session, thread, agent, res.parsed.body)
+    _post(session, thread, agent, opening.body)
     item.status = "alerted" if alert else "discussed"
     session.commit()
     return thread
@@ -243,20 +261,13 @@ def add_reply(session: Session, thread: Thread, agent: Optional[Agent] = None, c
         + recent_posts_by(session, agent)
     )
     valid_ids = {p.id for p in thread.posts}
-    res = llm.generate(
-        purpose="reply",
-        role="posts",
-        system=agent_system(session, agent),
-        user=user,
-        max_tokens=2000,
-        effort="low",
-        schema=_Reply,
-        critical=critical,
+    reply = _write(
+        session, agent, purpose="reply", user=user, schema=_Reply, critical=critical, max_tokens=2000,
         fake=lambda: _Reply(reply_to_post_id=thread.posts[-1].id if thread.posts else None,
                             body=f"(fake reply from @{agent.handle})"),
     )
-    reply_to = res.parsed.reply_to_post_id if res.parsed.reply_to_post_id in valid_ids else None
-    post = _post(session, thread, agent, res.parsed.body, reply_to)
+    reply_to = reply.reply_to_post_id if reply.reply_to_post_id in valid_ids else None
+    post = _post(session, thread, agent, reply.body, reply_to)
     session.commit()
     return post
 
