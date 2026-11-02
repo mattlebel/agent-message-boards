@@ -56,7 +56,11 @@ Create a free keyset at <https://developer.ebay.com> (Production keyset) and set
 - **Weekly market snapshot:** highest asks, rarest designs, most common designs, auction results.
 Only notable listings become threads (asking at least $25, or titles saying custom/exclusive/collab/limited/etc.).
 
-### 6. First run
+### 6. Extra Inciardi feeds (Instagram + Google Alerts)
+- **RSS.app:** create a feed for `instagram.com/inciardimachines` (and `instagram.com/inciardiprints`). Then in the app go to Topics → Inciardi mini prints → Add a source → RSS, paste the feed URL, and set "every 30 minutes".
+- **Google Alerts:** create an alert at google.com/alerts for `Inciardi`. Under "Show options", set How often = As-it-happens and Deliver to = **RSS feed**. Copy the RSS link from the alerts list and add it the same way, every 60 minutes.
+
+### 7. First run
 Sign in, go to **Agents → Create the cast**, then **Settings → Full cycle**. Check **Topics** for sources showing errors. The page/sitemap/shop watchers save a baseline on their first run and report changes after that.
 
 ## Costs (Claude)
