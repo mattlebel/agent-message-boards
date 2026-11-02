@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import re
-import time
 from datetime import datetime
 from typing import Optional
 from urllib.parse import urljoin, urlparse
@@ -16,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from app import config
 from app.db import utcnow
-from app.sources.base import RawItem, SourceError, get, html_to_text, http
+from app.sources.base import RawItem, SourceError, get, html_to_text
 
 # --- page_watch -----------------------------------------------------------------
 
@@ -187,69 +185,6 @@ def fetch_shopify(source, session) -> list[RawItem]:
     return items
 
 
-# --- eBay (Browse API) -----------------------------------------------------------
-
-_ebay_token: dict = {"value": None, "expires": 0.0}
-
-
-def _ebay_access_token() -> str:
-    if not (config.EBAY_CLIENT_ID and config.EBAY_CLIENT_SECRET):
-        raise SourceError("set EBAY_CLIENT_ID and EBAY_CLIENT_SECRET (developer.ebay.com) to watch eBay")
-    if _ebay_token["value"] and time.time() < _ebay_token["expires"] - 60:
-        return _ebay_token["value"]
-    auth = base64.b64encode(f"{config.EBAY_CLIENT_ID}:{config.EBAY_CLIENT_SECRET}".encode()).decode()
-    with http() as c:
-        resp = c.post(
-            "https://api.ebay.com/identity/v1/oauth2/token",
-            data={"grant_type": "client_credentials", "scope": "https://api.ebay.com/oauth/api_scope"},
-            headers={"Authorization": f"Basic {auth}"},
-        )
-    if resp.status_code != 200:
-        raise SourceError(f"eBay auth failed: HTTP {resp.status_code}")
-    data = resp.json()
-    _ebay_token.update(value=data["access_token"], expires=time.time() + data.get("expires_in", 7200))
-    return _ebay_token["value"]
-
-
-def fetch_ebay(source, session) -> list[RawItem]:
-    """Newly listed eBay items. High asking prices hint at rare / out-of-circulation prints."""
-    cfg = source.config or {}
-    query = cfg.get("query")
-    if not query:
-        raise SourceError("ebay needs a search query")
-    token = _ebay_access_token()
-    with http() as c:
-        resp = c.get(
-            "https://api.ebay.com/buy/browse/v1/item_summary/search",
-            params={"q": query, "limit": int(cfg.get("limit", 50)), "sort": "newlyListed"},
-            headers={"Authorization": f"Bearer {token}", "X-EBAY-C-MARKETPLACE-ID": "EBAY_US"},
-        )
-    if resp.status_code >= 400:
-        raise SourceError(f"eBay search HTTP {resp.status_code}")
-    min_price = float(cfg.get("min_price", 0))
-    items = []
-    for it in resp.json().get("itemSummaries", []):
-        price = float((it.get("price") or {}).get("value") or 0)
-        if price < min_price:
-            continue
-        created = it.get("itemCreationDate")
-        items.append(
-            RawItem(
-                key=f"ebay:{it.get('itemId')}",
-                title=f"eBay: {it.get('title')} (${price:,.2f})",
-                url=it.get("itemWebUrl", ""),
-                body=f"Listed at ${price:,.2f}. Condition: {it.get('condition', 'n/a')}. "
-                f"Buying options: {', '.join(it.get('buyingOptions', []))}.",
-                author=(it.get("seller") or {}).get("username", ""),
-                published_at=datetime.fromisoformat(created.replace("Z", "+00:00")).replace(tzinfo=None)
-                if created
-                else None,
-                extra={"price": price, "image": (it.get("image") or {}).get("imageUrl"), "kind": "listing"},
-            )
-        )
-    return items
-
-
 # --- websearch (Claude with the web search tool) ---------------------------------
 
 
@@ -262,6 +197,13 @@ class _Found(BaseModel):
 
 class _FoundList(BaseModel):
     items: list[_Found] = Field(default_factory=list)
+
+
+def _domains(value) -> list[str] | None:
+    if not value:
+        return None
+    parts = value if isinstance(value, list) else re.split(r"[,\s]+", str(value))
+    return [p.strip().lower().removeprefix("https://").removeprefix("www.").strip("/") for p in parts if p.strip()] or None
 
 
 def fetch_websearch(source, session) -> list[RawItem]:
@@ -299,6 +241,7 @@ def fetch_websearch(source, session) -> list[RawItem]:
         schema=_FoundList,
         web_search=True,
         max_searches=int(cfg.get("max_searches", 3)),
+        allowed_domains=_domains(cfg.get("domains")),
         fake=lambda: _FoundList(items=[]),
     )
     found: _FoundList = result.parsed

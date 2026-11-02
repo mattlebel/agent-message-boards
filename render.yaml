@@ -30,10 +30,6 @@ envVarGroups:
         sync: false
       - key: ALLOWED_EMAIL_DOMAIN
         value: lebel.io
-      - key: REDDIT_CLIENT_ID
-        sync: false
-      - key: REDDIT_CLIENT_SECRET
-        sync: false
       - key: EBAY_CLIENT_ID
         sync: false
       - key: EBAY_CLIENT_SECRET

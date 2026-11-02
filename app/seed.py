@@ -15,6 +15,8 @@ TOPICS = [
             "Inciardi Prints: Ana Inciardi's $1 linocut mini print vending machines (studio in Portland, ME). "
             "Care about: new machine locations, limited-time machines, pop-ups, special editions and collabs, "
             "which prints are rare / exclusive / out of circulation (OOC), and resale prices on eBay and Depop. "
+            "Exclusives usually come from collabs and venues (e.g. Only NY's 8-print set, the Whitney's limited "
+            "edition, the Richard Scarry series, seasonal runs). @inciardimachines on Instagram tracks locations. "
             "Ignore rehashed press about the origin story."
         ),
         "urgent_criteria": (
@@ -22,7 +24,8 @@ TOPICS = [
             "edition that was just announced or just went live. Alert especially when it's reachable from "
             "Boston within a 2-3 hour flight or a 4-5 hour train ride or drive (roughly: all of New England, "
             "NYC, Philly, DC, Montreal, Toronto, Chicago, the Southeast coast). A machine that is closing "
-            "soon is also worth an alert."
+            "soon is also worth an alert. An eBay 'first sighting' of a design never seen before counts if it "
+            "looks like a genuinely new print or venue exclusive (not just an old print we hadn't catalogued)."
         ),
         "sources": [
             {"kind": "page_watch", "name": "inciardiprints.com home", "config": {"url": "https://inciardiprints.com/"}, "interval_minutes": 30},
@@ -30,11 +33,23 @@ TOPICS = [
             {"kind": "shopify", "name": "Inciardi shop products", "config": {"url": "https://inciardiprints.com"}, "interval_minutes": 60},
             {"kind": "page_watch", "name": "miniprint.io home", "config": {"url": "https://miniprint.io/"}, "interval_minutes": 30},
             {"kind": "sitemap", "name": "miniprint.io new pages", "config": {"url": "https://miniprint.io/sitemap.xml"}, "interval_minutes": 60},
-            {"kind": "websearch", "name": "News of new machines and pop-ups", "interval_minutes": 360, "config": {
-                "query": "Inciardi mini print vending machine: new locations, limited-time machines, pop-ups, special editions",
-                "instructions": "Local news, museum/shop announcements, Instagram or Reddit posts about a machine arriving or a pop-up. Skip the generic origin-story articles.",
+            {"kind": "rss", "name": "Google News: Inciardi", "interval_minutes": 60, "config": {
+                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=Inciardi+(print+OR+prints+OR+vending+OR+machine)+when:14d"}},
+            {"kind": "websearch", "name": "Venue announcements and pop-ups", "interval_minutes": 360, "config": {
+                "query": "Inciardi mini print vending machine: new host locations, limited-time machines, pop-ups, collab or venue-exclusive print series",
+                "instructions": "Look for museums, bookstores, cafes, shops and events announcing a machine or exclusive prints, "
+                                "and posts from @inciardimachines / @inciardiprints. Skip origin-story features.",
                 "days": 4}},
-            {"kind": "ebay", "name": "eBay listings", "config": {"query": "inciardi mini print"}},
+            {"kind": "websearch", "name": "Collector chatter (Reddit, Instagram, TikTok)", "interval_minutes": 720, "config": {
+                "query": "Inciardi mini prints collectors: new prints pulled, rare finds, trades, machine restocks",
+                "domains": "reddit.com, instagram.com, tiktok.com, threads.net",
+                "days": 5}},
+            {"kind": "ebay", "name": "eBay market tracker", "interval_minutes": 120, "config": {
+                "query": "inciardi print", "min_price": 25}},
+            {"kind": "websearch", "name": "Depop / Mercari / Etsy resale", "interval_minutes": 4320, "config": {
+                "query": "Inciardi mini print listings for sale, especially rare, custom, exclusive or collab prints, with prices",
+                "domains": "depop.com, mercari.com, etsy.com, poshmark.com",
+                "days": 14, "max_results": 8}},
         ],
     },
     {
@@ -42,13 +57,13 @@ TOPICS = [
         "name": "r/runnyc",
         "priority": 4,
         "description": (
-            "The r/runnyc subreddit: NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
+            "The r/runnyc subreddit (read through web search, since Reddit closed its API): NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
             "prep and logistics, run clubs, routes, gear, and funny or heated threads."
         ),
         "sources": [
-            {"kind": "reddit", "name": "r/runnyc", "config": {"subreddit": "runnyc", "sort": "new", "min_score": 2}},
-            {"kind": "websearch", "name": "Backup: search r/runnyc (turn on if Reddit access stops)", "active": False,
-             "config": {"query": "site:reddit.com/r/runnyc new posts", "days": 2}},
+            {"kind": "websearch", "name": "r/runnyc via search", "config": {
+                "query": "New and popular posts in the r/runnyc subreddit (NYC running): races, NYRR, 9+1, marathon, run clubs",
+                "domains": "reddit.com/r/runnyc", "days": 2, "max_results": 8}},
         ],
     },
     {
@@ -65,8 +80,8 @@ TOPICS = [
                 "query": "New York Road Runners (NYRR) news: race announcements, registration openings, NYC Marathon updates", "days": 3}},
             {"kind": "websearch", "name": "NYC running community", "interval_minutes": 1440, "config": {
                 "query": "NYC running community news: run clubs, mile races, track meets, road races in New York City", "days": 4}},
-            {"kind": "reddit", "name": "r/running (NYC / marathon mentions)", "config": {
-                "subreddit": "running", "sort": "hot", "min_score": 50, "include": "NYC|New York|NYRR|marathon major|abbott|mile"}},
+            {"kind": "rss", "name": "Google News: NYRR", "config": {
+                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=%22New+York+Road+Runners%22+OR+NYRR+when:3d"}},
         ],
     },
     {
@@ -85,8 +100,8 @@ TOPICS = [
                 "days": 7}},
             {"kind": "websearch", "name": "BAA and Boston races", "interval_minutes": 1440, "config": {
                 "query": "Boston Athletic Association (BAA) news, Boston Marathon registration and qualifying, mile races in Boston", "days": 4}},
-            {"kind": "reddit", "name": "r/boston (running mentions)", "config": {
-                "subreddit": "boston", "sort": "hot", "min_score": 20, "include": "\\brun(ning|ners?)?\\b|marathon|\\b5k\\b|\\bmile\\b|tracksmith"}},
+            {"kind": "rss", "name": "Google News: BAA and Boston running", "config": {
+                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=%22Boston+Athletic+Association%22+OR+%22Tracksmith%22+OR+%22Boston+Marathon%22+when:3d"}},
         ],
     },
     {
@@ -118,7 +133,6 @@ TOPICS = [
                 "url": "https://www.doctorofcredit.com/feed/", "include": "amex|american express"}},
             {"kind": "rss", "name": "Frequent Miler (AmEx)", "config": {
                 "url": "https://frequentmiler.com/feed/", "include": "amex|american express"}},
-            {"kind": "reddit", "name": "r/amex", "config": {"subreddit": "amex", "sort": "hot", "min_score": 10}},
         ],
     },
     {

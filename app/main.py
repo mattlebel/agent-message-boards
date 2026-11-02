@@ -720,7 +720,6 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
         "Resend API key": bool(config.RESEND_API_KEY),
         "Resend webhook secret": bool(config.RESEND_WEBHOOK_SECRET),
         "Google sign-in": bool(config.GOOGLE_CLIENT_ID),
-        "Reddit API": bool(config.REDDIT_CLIENT_ID),
         "eBay API": bool(config.EBAY_CLIENT_ID),
     }
     return render(request, "settings.html", values=values, models=MODEL_CHOICES, by_purpose=by_purpose,

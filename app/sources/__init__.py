@@ -4,7 +4,7 @@ KINDS also drives the "add source" form in admin: the fields listed are the
 config keys the fetcher reads.
 """
 
-from app.sources import feeds, web
+from app.sources import ebay, feeds, web
 
 FETCHERS = {
     "rss": feeds.fetch_rss,
@@ -13,20 +13,15 @@ FETCHERS = {
     "page_watch": web.fetch_page_watch,
     "sitemap": web.fetch_sitemap,
     "shopify": web.fetch_shopify,
-    "ebay": web.fetch_ebay,
+    "ebay": ebay.fetch_ebay,
     "websearch": web.fetch_websearch,
 }
 
 KINDS = {
     "rss": {
-        "label": "RSS / Atom feed",
+        "label": "RSS / Atom feed (tip: Google News search feeds work here)",
         "fields": {"url": "Feed URL", "include": "Only keep items matching this regex (optional)",
                    "exclude": "Drop items matching this regex (optional)"},
-    },
-    "reddit": {
-        "label": "Subreddit",
-        "fields": {"subreddit": "e.g. runnyc", "sort": "new or hot", "min_score": "Minimum upvotes (optional)",
-                   "include": "Regex filter (optional)"},
     },
     "youtube": {
         "label": "YouTube (your subscriptions)",
@@ -46,12 +41,13 @@ KINDS = {
         "fields": {"url": "Shop URL"},
     },
     "ebay": {
-        "label": "New eBay listings",
-        "fields": {"query": "Search terms", "min_price": "Minimum price (optional)"},
+        "label": "eBay market tracker (catalog, first sightings, auction results)",
+        "fields": {"query": "Search terms", "min_price": "Post listings asking at least this much (default 25)"},
     },
     "websearch": {
         "label": "Claude web search (~$0.02-0.05 per run)",
         "fields": {"query": "What to look for", "instructions": "Extra guidance (optional)",
+                   "domains": "Only search these sites, comma separated (optional, e.g. reddit.com)",
                    "days": "How recent, in days (default 3)", "max_results": "Max items (default 6)"},
     },
 }

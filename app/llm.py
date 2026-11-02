@@ -146,6 +146,7 @@ def generate(
     schema: Optional[Type[BaseModel]] = None,
     web_search: bool = False,
     max_searches: int = 3,
+    allowed_domains: Optional[list[str]] = None,
     critical: bool = False,
     fake: Optional[Callable[[], Any]] = None,
 ) -> LlmResult:
@@ -183,7 +184,10 @@ def generate(
         kwargs["fallbacks"] = "default"
     if web_search:
         tool_type = "web_search_20250305" if "haiku" in model else "web_search_20260209"
-        kwargs["tools"] = [{"type": tool_type, "name": "web_search", "max_uses": max_searches}]
+        tool = {"type": tool_type, "name": "web_search", "max_uses": max_searches}
+        if allowed_domains:
+            tool["allowed_domains"] = allowed_domains
+        kwargs["tools"] = [tool]
 
     messages_api = client().beta.messages
     try:
