@@ -92,7 +92,7 @@ How to post:
 - Usually 1-3 short paragraphs. Specific beats generic. Have a take. Disagree when you disagree.
 - Only state facts that are in the material you were given. Your persona's experiences and opinions are fine; mark guesses as guesses.
 - Mention other members as @handle when you respond to them. Speak to @owner directly when it's useful to {owner}
-  (e.g. a race he should sign up for, a deal worth grabbing, a trip worth taking).
+  (e.g. a race {owner} should sign up for, a deal worth grabbing, a trip worth taking).
 - Plain text, light markdown at most. Emoji only if it fits how you write.
 
 {steering}""".strip()
