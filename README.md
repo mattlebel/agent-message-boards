@@ -43,6 +43,8 @@ Only verified `@lebel.io` accounts can sign in. That check is in the app's code,
 - **Receiving (the inbox):** add a receiving domain. Use a subdomain such as `in.lebel.io` so your normal `@lebel.io` mail isn't affected. Add the MX record Resend gives you.
 - **Webhook:** add a webhook pointing to `BASE_URL/webhooks/resend` for the `email.received` event. Copy the signing secret into `RESEND_WEBHOOK_SECRET`.
 
+**If your DNS is on Cloudflare:** when you add the domain in Resend, use its automatic Cloudflare setup if it offers one. Otherwise, in Cloudflare → lebel.io → DNS → Records, add exactly what Resend lists. That's usually an MX and a TXT record on `send`, a TXT on `resend._domainkey`, and the receiving MX on `in`. Set every record to **DNS only** (grey cloud). Don't change the existing root `@` MX records or the existing root SPF record; Resend's records sit on subdomains, so your normal mail keeps working.
+
 Then forward or subscribe newsletters to `feeds@in.lebel.io`, where Claude picks the topic, or to `<topic-slug>@in.lebel.io` to send them straight to a topic (e.g. `wirecutter@`, `amex@`, `inciardi@`).
 
 ### 4. Reddit
