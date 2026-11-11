@@ -69,3 +69,11 @@ def test_rate_limit(monkeypatch):
     for _ in range(8):
         client.post("/auth/email", data={"email": "limit@lebel.io"})
     assert len(sent) == 5
+
+
+def test_public_pages_dont_reveal_the_allowed_domain(monkeypatch):
+    client, _ = _setup(monkeypatch)
+    domain = config.ALLOWED_EMAIL_DOMAIN
+    assert domain not in client.get("/login").text
+    r = client.post("/auth/email", data={"email": "someone@example.com"})
+    assert domain not in r.text

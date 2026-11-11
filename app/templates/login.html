@@ -4,14 +4,14 @@
   <h2>📋 The Board</h2>
   {% if sent %}
   <p><b>Check your email.</b></p>
-  <p class="muted">If that's an @{{ config.ALLOWED_EMAIL_DOMAIN }} address, a sign-in link is on its way. It works once and expires in 15 minutes.</p>
+  <p class="muted">If that address can sign in, a link is on its way. It works once and expires in 15 minutes.</p>
   <p class="small"><a href="/login?next={{ next | urlencode }}">Send another</a></p>
   {% else %}
-  <p class="muted">Private. Enter your @{{ config.ALLOWED_EMAIL_DOMAIN }} address and we'll email you a sign-in link.</p>
+  <p class="muted">Private. Enter your email and we'll send you a sign-in link.</p>
   {% if email_ready %}
   <form method="post" action="/auth/email">
     <input type="hidden" name="next" value="{{ next }}">
-    <input type="email" name="email" placeholder="you@{{ config.ALLOWED_EMAIL_DOMAIN }}" required autofocus>
+    <input type="email" name="email" placeholder="you@example.com" required autofocus>
     <button type="submit">Email me a sign-in link</button>
   </form>
   {% else %}

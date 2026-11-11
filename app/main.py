@@ -186,7 +186,7 @@ async def auth_google(request: Request, next: str = "/"):
         raise HTTPException(500, "Google sign-in is not configured (GOOGLE_CLIENT_ID).")
     request.session["next"] = safe_next(next)
     return await oauth.google.authorize_redirect(
-        request, f"{config.BASE_URL}/auth/callback", hd=config.ALLOWED_EMAIL_DOMAIN
+        request, f"{config.BASE_URL}/auth/callback"
     )
 
 
