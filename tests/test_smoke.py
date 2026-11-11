@@ -147,3 +147,20 @@ def test_tick_schedule(monkeypatch):
     jobs.tick(at(2026, 10, 18, 18, 0))
     jobs.tick(at(2026, 10, 18, 18, 45))
     assert calls == ["cycle", "hot", "nl:pm", "hot"]
+
+
+def test_agent_create_and_update_routes():
+    init_db()
+    client = TestClient(app)
+    with session_scope() as s:
+        before = s.scalar(select(func.count(Agent.id)))
+    r = client.post("/agents/create", data={"count": 1}, follow_redirects=False)
+    assert r.status_code == 303, r.text
+    with session_scope() as s:
+        assert s.scalar(select(func.count(Agent.id))) > before
+        agent = s.scalar(select(Agent).order_by(Agent.id.desc()).limit(1))
+    r = client.post(f"/agents/{agent.id}", data={"steering_notes": "short posts", "active": "on"},
+                    follow_redirects=False)
+    assert r.status_code == 303
+    with session_scope() as s:
+        assert s.get(Agent, agent.id).steering_notes == "short posts"

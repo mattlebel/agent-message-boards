@@ -499,18 +499,6 @@ def agent_page(request: Request, handle: str, user=Depends(require_user), sessio
     return render(request, "agent.html", agent=agent, posts=posts, topics=topics, nav="agents")
 
 
-@app.post("/agents/{agent_id}")
-async def update_agent(request: Request, agent_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
-    form = await request.form()
-    agent = session.get(Agent, agent_id)
-    agent.interests = form.getlist("interests")
-    agent.steering_notes = (form.get("steering_notes") or "").strip()
-    agent.active = form.get("active") == "on"
-    session.commit()
-    flash(request, "Saved.")
-    return back(f"/agents/{agent.handle}")
-
-
 @app.post("/agents/create")
 def create_agents(request: Request, background: BackgroundTasks, count: int = Form(1),
                   user=Depends(require_user), session: Session = Depends(get_session)):
@@ -523,6 +511,18 @@ def create_agents(request: Request, background: BackgroundTasks, count: int = Fo
             background.add_task(run_bg, lambda s: personas.create_persona(s, personas.coverage_gaps(s) or None))
         flash(request, "A new member is creating their persona. Refresh in a minute.")
     return back("/agents")
+
+
+@app.post("/agents/{agent_id:int}")
+async def update_agent(request: Request, agent_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    form = await request.form()
+    agent = session.get(Agent, agent_id)
+    agent.interests = form.getlist("interests")
+    agent.steering_notes = (form.get("steering_notes") or "").strip()
+    agent.active = form.get("active") == "on"
+    session.commit()
+    flash(request, "Saved.")
+    return back(f"/agents/{agent.handle}")
 
 
 # --- newsletters --------------------------------------------------------------------------
