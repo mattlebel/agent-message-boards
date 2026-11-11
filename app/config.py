@@ -26,7 +26,7 @@ DATABASE_URL = _database_url()
 SECRET_KEY = _env("SECRET_KEY", "dev-secret-change-me")
 BASE_URL = _env("BASE_URL", "http://localhost:8000").rstrip("/")
 
-# Local development only: skips Google login. Never set this on Render.
+# Local development only: skips login. Never set this on Render.
 DEV_MODE = _flag("DEV_MODE")
 
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")

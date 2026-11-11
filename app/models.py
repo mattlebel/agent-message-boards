@@ -231,3 +231,12 @@ class YoutubeChannel(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     added_via: Mapped[str] = mapped_column(String(20), default="manual")  # oauth, csv, manual
     added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class LoginToken(Base):
+    """One-time emailed sign-in links. The link itself is signed; this row makes it single-use."""
+    __tablename__ = "login_tokens"
+    nonce: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

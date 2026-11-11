@@ -24,7 +24,10 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, style, suggestions
-from app.auth import LoginRequired, current_user, email_allowed, oauth, require_user, require_user_api
+from app.auth import (
+    LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
+    redeem_login_token, require_user, require_user_api, safe_next,
+)
 from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
@@ -134,14 +137,54 @@ def run_bg(fn, *args) -> None:
 def login_page(request: Request, next: str = "/"):
     if current_user(request):
         return back(next)
-    return render(request, "login.html", next=next, google=bool(config.GOOGLE_CLIENT_ID))
+    return render(request, "login.html", next=safe_next(next), google=bool(config.GOOGLE_CLIENT_ID),
+                  email_ready=bool(config.RESEND_API_KEY), sent=False)
+
+
+@app.post("/auth/email", response_class=HTMLResponse)
+def auth_email(request: Request, email: str = Form(...), next: str = Form("/"),
+               session: Session = Depends(get_session)):
+    email = email.strip().lower()
+    nxt = safe_next(next)
+    # Same answer whether or not the address is allowed, so the page doesn't reveal who can sign in.
+    if email_allowed(email) and can_send_link(session, email):
+        token = make_login_token(session, email, nxt)
+        session.commit()
+        link = f"{config.BASE_URL}/auth/email/verify?token={quote(token)}"
+        body = (f'<p>Here is your link to sign in to The Board. It works once and expires in 15 minutes.</p>'
+                f'<p><a href="{html_lib.escape(link)}">Sign in to The Board</a></p>')
+        try:
+            emailer.send([email], "Your sign-in link for The Board",
+                         emailer.wrap("Sign in", body, "The Board", "If you didn't ask for this, you can ignore it."),
+                         text=f"Sign in to The Board (works once, expires in 15 minutes):\n{link}\n")
+        except emailer.EmailError:
+            log.exception("couldn't send sign-in link")
+    return render(request, "login.html", next=nxt, google=bool(config.GOOGLE_CLIENT_ID),
+                  email_ready=bool(config.RESEND_API_KEY), sent=True)
+
+
+@app.get("/auth/email/verify", response_class=HTMLResponse)
+def auth_email_verify(request: Request, token: str = "", session: Session = Depends(get_session)):
+    # Shows a button instead of signing in on GET, so a mail app that pre-opens links can't use it up.
+    return render(request, "login_confirm.html", token=token, email=peek_login_token(session, token))
+
+
+@app.post("/auth/email/verify")
+def auth_email_redeem(request: Request, token: str = Form(""), session: Session = Depends(get_session)):
+    found = redeem_login_token(session, token)
+    if not found:
+        return render(request, "login_confirm.html", token="", email=None)
+    email, nxt = found
+    request.session.clear()
+    request.session["user"] = {"email": email, "name": "", "picture": ""}
+    return back(nxt)
 
 
 @app.get("/auth/google")
 async def auth_google(request: Request, next: str = "/"):
     if not config.GOOGLE_CLIENT_ID:
         raise HTTPException(500, "Google sign-in is not configured (GOOGLE_CLIENT_ID).")
-    request.session["next"] = next if next.startswith("/") else "/"
+    request.session["next"] = safe_next(next)
     return await oauth.google.authorize_redirect(
         request, f"{config.BASE_URL}/auth/callback", hd=config.ALLOWED_EMAIL_DOMAIN
     )
@@ -720,7 +763,8 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
         "Anthropic API key": bool(config.ANTHROPIC_API_KEY),
         "Resend API key": bool(config.RESEND_API_KEY),
         "Resend webhook secret": bool(config.RESEND_WEBHOOK_SECRET),
-        "Google sign-in": bool(config.GOOGLE_CLIENT_ID),
+        "Email sign-in links (Resend)": bool(config.RESEND_API_KEY),
+        "Google sign-in (optional)": bool(config.GOOGLE_CLIENT_ID),
         "eBay API": bool(config.EBAY_CLIENT_ID),
     }
     return render(request, "settings.html", values=values, models=MODEL_CHOICES, by_purpose=by_purpose,

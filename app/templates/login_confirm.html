@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<article style="max-width: 420px; margin: 4rem auto; text-align: center;">
+  <h2>📋 The Board</h2>
+  {% if email %}
+  <p class="muted">Signing in as <b>{{ email }}</b>.</p>
+  <form method="post" action="/auth/email/verify">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button type="submit">Sign in</button>
+  </form>
+  {% else %}
+  <p><b>That link has expired or was already used.</b></p>
+  <p><a role="button" href="/login">Get a new link</a></p>
+  {% endif %}
+</article>
+{% endblock %}

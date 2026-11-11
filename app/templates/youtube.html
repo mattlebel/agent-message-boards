@@ -7,7 +7,7 @@
   <article>
     <h5>Import from your YouTube account</h5>
     <p class="small">Sign in with the Google account that has your subscriptions (it can be a personal Gmail). We read the list once and don't keep the token.</p>
-    {% if google %}<a role="button" href="/youtube/connect">Import subscriptions</a>{% else %}<p class="small">Needs Google sign-in configured.</p>{% endif %}
+    {% if google %}<a role="button" href="/youtube/connect">Import subscriptions</a>{% else %}<p class="small">Needs the optional Google setup (see the README). The Takeout upload works without it.</p>{% endif %}
   </article>
   <article>
     <h5>Or upload a Takeout CSV</h5>

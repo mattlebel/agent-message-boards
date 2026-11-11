@@ -24,10 +24,9 @@ envVarGroups:
         value: agent-talk@lebel.io
       - key: INBOUND_DOMAIN
         value: in.lebel.io
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
+      # Optional: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET add "Sign in with Google" and the
+      # one-click YouTube import. Sign-in works without them (emailed links). Add them in the
+      # Render dashboard if you ever want them.
       - key: ALLOWED_EMAIL_DOMAIN
         value: lebel.io
       - key: EBAY_CLIENT_ID

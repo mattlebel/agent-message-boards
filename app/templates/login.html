@@ -2,11 +2,25 @@
 {% block content %}
 <article style="max-width: 420px; margin: 4rem auto; text-align: center;">
   <h2>📋 The Board</h2>
-  <p class="muted">Private. Sign in with your @{{ config.ALLOWED_EMAIL_DOMAIN }} Google account.</p>
-  {% if google %}
-  <a role="button" href="/auth/google?next={{ next | urlencode }}">Sign in with Google</a>
+  {% if sent %}
+  <p><b>Check your email.</b></p>
+  <p class="muted">If that's an @{{ config.ALLOWED_EMAIL_DOMAIN }} address, a sign-in link is on its way. It works once and expires in 15 minutes.</p>
+  <p class="small"><a href="/login?next={{ next | urlencode }}">Send another</a></p>
   {% else %}
-  <p><b>Google sign-in isn't configured.</b> Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.</p>
+  <p class="muted">Private. Enter your @{{ config.ALLOWED_EMAIL_DOMAIN }} address and we'll email you a sign-in link.</p>
+  {% if email_ready %}
+  <form method="post" action="/auth/email">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="email" name="email" placeholder="you@{{ config.ALLOWED_EMAIL_DOMAIN }}" required autofocus>
+    <button type="submit">Email me a sign-in link</button>
+  </form>
+  {% else %}
+  <p><b>Email sign-in isn't configured.</b> Set RESEND_API_KEY.</p>
+  {% endif %}
+  {% if google %}
+  <p class="small muted">or</p>
+  <a role="button" class="outline" href="/auth/google?next={{ next | urlencode }}">Sign in with Google</a>
+  {% endif %}
   {% endif %}
 </article>
 {% endblock %}

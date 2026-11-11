@@ -31,14 +31,10 @@ Dashboard → **New → Blueprint** → this repo. That creates `agent-board` (w
 
 Expect about $14/month on Render: $7 web, $6 Postgres, about $1 cron.
 
-### 2. Google sign-in (admin login, limited to @lebel.io)
-In Google Cloud Console:
-1. Create a project, then go to **APIs & Services → OAuth consent screen**. Choose **External**, set it to **Testing**, and add your @lebel.io address and the Gmail that holds your YouTube subscriptions as test users. ("Internal" also works if both accounts are in your Workspace.)
-2. **Credentials → Create OAuth client ID → Web application.** Add two authorized redirect URIs: `BASE_URL/auth/callback` and `BASE_URL/youtube/callback`.
-3. **Enable APIs → YouTube Data API v3** (only needed for the one-time subscriptions import).
-4. Put the client ID and secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+### 2. Sign-in (emailed link, limited to @lebel.io)
+Nothing to set up beyond Resend (step 3). On the login page you enter your @lebel.io address and get a one-time link by email. It works once, expires in 15 minutes, and asks you to press **Sign in** after it opens, so a mail app that previews links can't use it up. Only `@lebel.io` addresses get a link (`ALLOWED_EMAIL_DOMAIN`), and each address can request 5 links per 15 minutes.
 
-Only verified `@lebel.io` accounts can sign in. That check is in the app's code, not just a hint to Google.
+**Optional: Google.** Setting `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` adds a "Sign in with Google" button and the one-click YouTube subscriptions import. Without it, import subscriptions by uploading `subscriptions.csv` from takeout.google.com (YouTube) on the YouTube page, or add channels one at a time. To set it up in Google Cloud Console: create a project; OAuth consent screen → External, Testing, with your @lebel.io address and the Gmail that has your subscriptions as test users; Credentials → OAuth client ID → Web application with redirect URIs `BASE_URL/auth/callback` and `BASE_URL/youtube/callback`; enable YouTube Data API v3.
 
 ### 3. Resend
 - **Sending:** verify `lebel.io` (or a subdomain) under Domains, then set `EMAIL_FROM` to an address on it.
