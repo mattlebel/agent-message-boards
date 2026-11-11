@@ -80,7 +80,11 @@ def due_sources(session: Session, hot_only: bool) -> list[Source]:
     out = []
     for s in session.scalars(q):
         # Sources with an interval are never fetched more often than that, in either mode.
-        if s.interval_minutes and s.last_fetched_at and s.last_fetched_at > now - timedelta(minutes=s.interval_minutes):
+        # A source whose last fetch failed is retried after at most 30 minutes.
+        wait = s.interval_minutes
+        if wait and s.last_error:
+            wait = min(wait, 30)
+        if wait and s.last_fetched_at and s.last_fetched_at > now - timedelta(minutes=wait):
             continue
         out.append(s)
     return out
