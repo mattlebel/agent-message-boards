@@ -206,6 +206,15 @@ def _domains(value) -> list[str] | None:
     return [p.strip().lower().removeprefix("https://").removeprefix("www.").strip("/") for p in parts if p.strip()] or None
 
 
+def _blocked_domains(error: Exception) -> list[str]:
+    """Sites Anthropic's web search refuses to read, from its 400 error message."""
+    msg = str(error)
+    if "not accessible to our user agent" not in msg:
+        return []
+    m = re.search(r"\[([^\]]*)\]", msg.split("not accessible to our user agent", 1)[1])
+    return [d.strip(" '\"").lower() for d in m.group(1).split(",") if d.strip(" '\"")] if m else []
+
+
 def fetch_websearch(source, session) -> list[RawItem]:
     """For sources nobody publishes a feed for (local run clubs, pop-up announcements,
     Reddit/Facebook/Instagram chatter that shows up in search results)."""
@@ -231,19 +240,38 @@ def fetch_websearch(source, session) -> list[RawItem]:
         '{"items": [{"title": "...", "url": "...", "summary": "2-3 factual sentences", "published": "YYYY-MM-DD"}]}. '
         'Return {"items": []} if nothing new and relevant.'
     )
-    result = llm.generate(
-        purpose="websearch",
-        role="search",
-        system=system,
-        user=user,
-        max_tokens=4000,
-        effort="low",
-        schema=_FoundList,
-        web_search=True,
-        max_searches=int(cfg.get("max_searches", 3)),
-        allowed_domains=_domains(cfg.get("domains")),
-        fake=lambda: _FoundList(items=[]),
-    )
+    domains = _domains(cfg.get("domains"))
+
+    def search(allowed):
+        return llm.generate(
+            purpose="websearch",
+            role="search",
+            system=system,
+            user=user,
+            max_tokens=4000,
+            effort="low",
+            schema=_FoundList,
+            web_search=True,
+            max_searches=int(cfg.get("max_searches", 3)),
+            allowed_domains=allowed,
+            fake=lambda: _FoundList(items=[]),
+        )
+
+    try:
+        result = search(domains)
+    except Exception as e:  # noqa: BLE001 - narrowed below
+        blocked = _blocked_domains(e)
+        if not blocked or not domains:
+            raise
+        remaining = [d for d in domains if not any(d == b or d.startswith(b + "/") for b in blocked)]
+        if not remaining:
+            raise SourceError(
+                f"Claude's web search can't read {', '.join(blocked)} (the site blocks it). Turn this source "
+                "off; for Reddit, forward its digest emails to the inbox address for this topic instead."
+            ) from e
+        # Remember the cleaned list so this doesn't fail again next time.
+        source.config = {**cfg, "domains": ", ".join(remaining)}
+        result = search(remaining)
     found: _FoundList = result.parsed
     items = []
     for f in found.items:

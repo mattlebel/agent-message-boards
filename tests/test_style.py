@@ -58,3 +58,31 @@ def test_write_revises_once_when_tropes_found(monkeypatch):
         s.delete(agent)
     assert calls == ["reply", "reply_revise"]
     assert out.body == "Line was 40 deep at 7am."
+
+
+def test_websearch_drops_blocked_domains(monkeypatch):
+    import pytest
+
+    from app import llm
+    from app.models import Source
+    from app.sources import web
+    from app.sources.base import SourceError
+
+    calls = []
+
+    def fake_generate(**kw):
+        calls.append(kw.get("allowed_domains"))
+        if any(d.split("/")[0] in ("reddit.com", "threads.net") for d in kw.get("allowed_domains") or []):
+            raise Exception("Error code: 400 - The following domains are not accessible to our user agent: "
+                            "['reddit.com', 'threads.net']. Read more: https://support.anthropic.com/x")
+        return llm.LlmResult(text="{}", parsed=web._FoundList(items=[]))
+
+    monkeypatch.setattr(llm, "generate", fake_generate)
+    src = Source(kind="websearch", name="x", config={"query": "q", "domains": "reddit.com, instagram.com, threads.net"})
+    assert web.fetch_websearch(src, None) == []
+    assert calls == [["reddit.com", "instagram.com", "threads.net"], ["instagram.com"]]
+    assert src.config["domains"] == "instagram.com"
+
+    only_reddit = Source(kind="websearch", name="y", config={"query": "q", "domains": "reddit.com/r/runnyc"})
+    with pytest.raises(SourceError, match="can't read reddit.com"):
+        web.fetch_websearch(only_reddit, None)

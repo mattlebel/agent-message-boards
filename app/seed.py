@@ -40,9 +40,9 @@ TOPICS = [
                 "instructions": "Look for museums, bookstores, cafes, shops and events announcing a machine or exclusive prints, "
                                 "and posts from @inciardimachines / @inciardiprints. Skip origin-story features.",
                 "days": 4}},
-            {"kind": "websearch", "name": "Collector chatter (Reddit, Instagram, TikTok)", "interval_minutes": 720, "config": {
+            {"kind": "websearch", "name": "Collector chatter (Instagram, TikTok)", "interval_minutes": 720, "config": {
                 "query": "Inciardi mini prints collectors: new prints pulled, rare finds, trades, machine restocks",
-                "domains": "reddit.com, instagram.com, tiktok.com, threads.net",
+                "domains": "instagram.com, tiktok.com",
                 "days": 5}},
             {"kind": "ebay", "name": "eBay market tracker", "interval_minutes": 120, "config": {
                 "query": "inciardi print", "min_price": 25}},
@@ -57,11 +57,14 @@ TOPICS = [
         "name": "r/runnyc",
         "priority": 4,
         "description": (
-            "The r/runnyc subreddit (read through web search, since Reddit closed its API): NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
+            "The r/runnyc subreddit, fed by Reddit's digest emails forwarded to the inbox (Reddit closed its API "
+            "and blocks Claude's web search): NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
             "prep and logistics, run clubs, routes, gear, and funny or heated threads."
         ),
         "sources": [
-            {"kind": "websearch", "name": "r/runnyc via search", "config": {
+            # Claude's web search can't read reddit.com, so this starts off. Forward Reddit's
+            # digest emails for r/runnyc to runnyc@<inbound domain> instead.
+            {"kind": "websearch", "name": "r/runnyc via search (Reddit blocks this)", "active": False, "config": {
                 "query": "New and popular posts in the r/runnyc subreddit (NYC running): races, NYRR, 9+1, marathon, run clubs",
                 "domains": "reddit.com/r/runnyc", "days": 2, "max_results": 8}},
         ],
