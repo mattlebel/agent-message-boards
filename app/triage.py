@@ -78,6 +78,8 @@ def triage(session: Session) -> int:
                 "threads score high.\n\nAbout the owner:\n" + profile
             )
             user = (
+                f"Today is {datetime.now(config.TZ):%A %B %d, %Y}. Score down anything whose dates have "
+                "already passed (deadlines, registration windows, events, expired offers).\n"
                 f"Topic: {topic.name}\nWhat the owner wants from this topic: {topic.description}\n\n"
                 "Items:\n\n" + "\n\n".join(item_brief(i) for i in chunk)
             )
