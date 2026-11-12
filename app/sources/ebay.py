@@ -7,6 +7,9 @@ eBay's sold-history API is closed to individual developers, so this builds its o
 - a weekly market snapshot (most expensive, rarest, most common, auction results)
 
 Only notable listings become board items; the rest just feed the catalog.
+
+No eBay user data is kept (no seller or buyer names), which is what lets the keyset claim
+eBay's Marketplace Account Deletion exemption.
 """
 
 from __future__ import annotations
@@ -192,7 +195,6 @@ def fetch_ebay(source, session) -> list[RawItem]:
                 url=it.get("itemWebUrl", ""),
                 body=f"{'Auction, current bid' if is_auction else 'Asking'} ${price:,.2f}. Condition: "
                      f"{it.get('condition', 'n/a')}. {stats}.",
-                author=(it.get("seller") or {}).get("username", ""),
                 published_at=_when(it.get("itemCreationDate")),
                 extra={"kind": "listing", "price": price, "design": design,
                        "image": (it.get("image") or {}).get("imageUrl")},
