@@ -146,22 +146,10 @@ def _write(session: Session, agent: Agent, *, purpose: str, user: str, schema, c
            max_tokens: int):
     """Draft a post; if it has obvious machine-writing tells, ask the same agent for one revision."""
     system = agent_system(session, agent)
-    res = llm.generate(purpose=purpose, role="posts", system=system, user=user, max_tokens=max_tokens,
-                       effort="low", schema=schema, critical=critical, fake=fake)
-    draft = res.parsed
-    text = " ".join(str(v) for v in draft.model_dump().values() if isinstance(v, str))
-    tropes = style.find_tropes(text)
-    if not tropes:
-        return draft
-    try:
-        res2 = llm.generate(
-            purpose=f"{purpose}_revise", role="posts", system=system,
-            user=f"{user}\n\nYour draft:\n{draft.model_dump_json()}\n\n{style.revision_note(tropes)}",
-            max_tokens=max_tokens, effort="low", schema=schema, critical=critical, fake=lambda: draft,
-        )
-        return res2.parsed
-    except (llm.BudgetExceeded, llm.LlmError):
-        return draft
+    draft = llm.generate(purpose=purpose, role="posts", system=system, user=user, max_tokens=max_tokens,
+                         effort="low", schema=schema, critical=critical, fake=fake).parsed
+    return style.polish(draft, purpose=purpose, role="posts", system=system, user=user,
+                        critical=critical, max_tokens=max_tokens)
 
 
 # --- choosing who talks ------------------------------------------------------------

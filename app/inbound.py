@@ -88,7 +88,8 @@ def process_email(session: Session, row: InboundEmail, email: dict) -> None:
         system=(
             "You split a newsletter or notification email into separate news items for a message board. "
             "Keep only items relevant to the topic and the owner. Skip ads, footers, and unsubscribe junk. "
-            "Use the real article/deal link when present.\n\nAbout the owner:\n" + profile
+            "Use the real article/deal link when present. Summaries state facts plainly, with no hype or "
+            "filler.\n\nAbout the owner:\n" + profile
         ),
         user=f"Topic: {topic.name}: {topic.description}\n\nSubject: {row.subject}\nFrom: {row.from_addr}\n\n{text}",
         max_tokens=4000,

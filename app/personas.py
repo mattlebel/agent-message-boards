@@ -90,7 +90,11 @@ def create_persona(session: Session, needs_voices_for: list[str] | None = None) 
         critical=True,
         fake=lambda: _fake_persona(topics, len(existing)),
     )
-    p: PersonaOut = res.parsed
+    p: PersonaOut = style.polish(
+        res.parsed, purpose="persona", role="personas",
+        system="You are a new member of an online community, creating the identity you'll keep forever.",
+        user=user, critical=True, max_tokens=6000,
+    )
     valid = {t.slug for t in topics}
     interests = [s for s in p.interests if s in valid] or random.sample(sorted(valid), k=min(2, len(valid)))
     handle = _clean_handle(session, p.handle)

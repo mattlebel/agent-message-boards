@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, llm, settings_store
+from app import config, emailer, llm, settings_store, style
 from app.db import utcnow
 from app.models import Agent, Feedback, Newsletter, Post, Source, Thread, Topic, TopicSuggestion
 from app.sources import KINDS
@@ -101,10 +101,16 @@ def generate(session: Session) -> list[TopicSuggestion]:
                         why="You're fastest at the mile.", sources=[_SuggestedSource(kind="websearch", name="Mile races", query="road mile race Boston NYC")]),
         ]),
     )
+    system_plain = ("You are a sharp, well-read friend who finds great niche corners of the internet for people. "
+                    "Write the 'why' lines plainly, like a text to a friend.\n\nWriting rules:\n" + style.guide(session))
+    ideas = style.polish(res.parsed, purpose="suggestions", role="suggestions", system=system_plain,
+                         user="Here are topic suggestions for a personal message board. Keep every fact, "
+                              "source and URL exactly as is; only fix the wording of names, descriptions and why lines.",
+                         critical=True, max_tokens=8000)
     batch = f"{datetime.now(config.TZ):%G-W%V}"
     existing_slugs = {t.slug for t in topics}
     out = []
-    for s in res.parsed.suggestions[:8]:
+    for s in ideas.suggestions[:8]:
         slug = slugify(s.name)
         if slug in existing_slugs:
             continue

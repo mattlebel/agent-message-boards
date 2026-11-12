@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, llm, settings_store
+from app import config, llm, settings_store, style
 from app.db import utcnow
 from app.models import Item, Topic
 
@@ -75,7 +75,7 @@ def triage(session: Session) -> int:
                 "0-10 for how much this specific person would care, and how much there is to talk about. "
                 "Be harsh: duplicates, spam, generic evergreen pages, ads, and stale news score 0-3. "
                 "Concrete news, deals with real value, upcoming races/events, drops, and lively community "
-                "threads score high.\n\nAbout the owner:\n" + profile
+                "threads score high. Notes are one plain line, no hype.\n\nAbout the owner:\n" + profile
             )
             user = (
                 f"Today is {datetime.now(config.TZ):%A %B %d, %Y}. Score down anything whose dates have "
@@ -216,6 +216,13 @@ def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertD
             it.extra = {**(it.extra or {}), "urgent_checked": True}
             d = by_id.get(it.id)
             if d and d.is_alert:
+                d = style.polish(
+                    d, purpose="alert_text", role="alerts",
+                    system="You write short, plain alert emails for one reader. Facts only, no hype.\n\n"
+                           "Writing rules:\n" + style.guide(session),
+                    user=f"The item:\n{item_brief(it, 1500)}\n\nKeep every fact; only fix the wording.",
+                    critical=True, max_tokens=1500,
+                )
                 it.status = "alerted"
                 it.score = 10.0
                 it.extra = {**(it.extra or {}), "alert": d.model_dump()}

@@ -230,7 +230,8 @@ def fetch_websearch(source, session) -> list[RawItem]:
     system = (
         "You are a research assistant who finds fresh, specific news for a personal message board. "
         "Use web search. Only return items that are actually recent and specific (an event, a drop, "
-        "a post, an announcement), never generic evergreen pages. Respond with JSON only."
+        "a post, an announcement), never generic evergreen pages. Summaries state facts plainly: no hype, "
+        "no 'highlighting the importance of', no filler. Respond with JSON only."
     )
     user = (
         f"Today is {datetime.now(config.TZ):%A %B %d, %Y}.\n"

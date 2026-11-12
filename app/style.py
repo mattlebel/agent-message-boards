@@ -85,20 +85,87 @@ _PATTERNS: list[tuple[str, str]] = [
 _COMPILED = [(re.compile(p, re.I | re.M), label) for p, label in _PATTERNS]
 
 
-def find_tropes(text: str, long_form: bool = False) -> list[str]:
-    """Labels of mechanical LLM tells found in text (deduplicated, with an example)."""
+_NUMBER = re.compile(
+    r"\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|fifty|"
+    r"hundred|dozen|\d+)\b", re.I)
+
+
+def _counted_list(line: str) -> bool:
+    """'Fifteen prints, five per pack, two packs, zero prices': a short line built from counted clauses."""
+    clauses = [c for c in re.split(r"[,;:]", line) if c.strip()]
+    counted = sum(1 for c in clauses if _NUMBER.search(c))
+    return len(clauses) >= 3 and counted >= 3 and len(line.split()) <= 16
+
+
+def find_tropes(text: str, long_form: bool = False, headline: bool = False) -> list[str]:
+    """Labels of mechanical LLM tells found in text (deduplicated, with an example).
+
+    headline=True is for subject lines, titles and section headings, which get an extra check
+    for counted-list constructions.
+    """
+    text = text or ""
     found: list[str] = []
     for rx, label in _COMPILED:
-        m = rx.search(text or "")
+        m = rx.search(text)
         if m:
             found.append(f'{label} ("{m.group(0).strip()[:60]}")')
-    dashes = (text or "").count("—")
-    words = max(1, len((text or "").split()))
-    if dashes >= 3 or (not long_form and dashes >= 2 and words < 150):
+    dashes = text.count("\u2014")
+    words = max(1, len(text.split()))
+    if dashes >= 3 or (not long_form and not headline and dashes >= 2 and words < 150):
         found.append(f"em dashes ({dashes})")
-    if not long_form and re.search(r"^\s*(\*\*[^*]+\*\*|#+ )", text or "", re.M):
+    if not long_form and not headline and re.search(r"^\s*(\*\*[^*]+\*\*|#+ )", text, re.M):
         found.append("headings/bold labels in a casual post")
+    headings = [text] if headline else re.findall(r"^#+\s+(.+)$", text, re.M) if long_form else []
+    for line in headings:
+        if _counted_list(line):
+            found.append(f'counted-list headline ("{line.strip()[:60]}")')
+            break
     return found
+
+
+HEADLINE_FIELDS = {"subject", "title", "headline", "name"}
+
+
+def tropes_in(obj, long_form: bool = False) -> list[str]:
+    """Check every text field of a pydantic object (or dict/list); headline-like fields get the headline check."""
+    data = obj.model_dump() if hasattr(obj, "model_dump") else obj
+    found: list[str] = []
+
+    def walk(value, key=""):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                walk(v, k)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v, key)
+        elif isinstance(value, str) and value.strip():
+            found.extend(find_tropes(value, long_form=long_form and key not in HEADLINE_FIELDS,
+                                     headline=key in HEADLINE_FIELDS))
+
+    walk(data)
+    return list(dict.fromkeys(found))
+
+
+def polish(draft, *, purpose: str, role: str, system: str, user: str, critical: bool = False,
+           long_form: bool = False, threshold: int = 1, max_tokens: int = 4000, effort: str = "low"):
+    """Check a structured draft; if it has `threshold`+ tells, ask the same writer for one revision.
+
+    Returns the revised object, or the draft if it was clean or the revision failed.
+    """
+    from app import llm
+
+    tropes = tropes_in(draft, long_form=long_form)
+    if len(tropes) < threshold:
+        return draft
+    try:
+        return llm.generate(
+            purpose=f"{purpose}_revise", role=role, system=system,
+            user=f"{user}\n\nYour draft:\n{draft.model_dump_json()}\n\n{revision_note(tropes)}",
+            max_tokens=max_tokens, effort=effort, schema=type(draft), critical=critical,
+            fake=lambda: draft,
+        ).parsed
+    except (llm.BudgetExceeded, llm.LlmError):
+        return draft
 
 
 def revision_note(tropes: list[str]) -> str:

@@ -171,3 +171,35 @@ def test_manually_fetched_urgent_items_get_alert_checked():
         item = s.scalar(select(Item).where(Item.topic_id == topic.id))
         assert item.extra.get("urgent_checked") is True
         s.delete(topic)
+
+
+def test_headline_counted_lists():
+    assert style.find_tropes("Fifteen prints, five per pack, two packs, zero prices", headline=True)
+    assert style.find_tropes("Holiday Drop: mystery packs Friday at noon", headline=True) == []
+    # Fact-heavy body text is fine; the counted-list check only applies to headlines.
+    assert style.find_tropes("Saturday Nov 14, 8am, $25 entry, 2 miles from the start.") == []
+    md = "## Three races, two deadlines, one bib\n\nBody."
+    assert any("counted-list" in t for t in style.find_tropes(md, long_form=True))
+
+
+def test_polish_rewrites_a_newsletter_subject(monkeypatch):
+    from app import llm
+    from app.newsletter import _Edition
+
+    draft = _Edition(subject="Fifteen prints, five per pack, two packs, zero prices", preheader="p",
+                     markdown="## Mystery packs\n\nThey go on sale Friday at noon.")
+    calls = []
+
+    def fake_generate(**kw):
+        calls.append(kw["purpose"])
+        return llm.LlmResult(text="", parsed=draft.model_copy(update={"subject": "The mystery pack math"}))
+
+    monkeypatch.setattr(llm, "generate", fake_generate)
+    out = style.polish(draft, purpose="newsletter", role="newsletter", system="s", user="u", long_form=True)
+    assert calls == ["newsletter_revise"] and out.subject == "The mystery pack math"
+
+    calls.clear()
+    clean = draft.model_copy(update={"subject": "The mystery pack math"})
+    assert style.polish(clean, purpose="newsletter", role="newsletter", system="s", user="u",
+                        long_form=True) is clean
+    assert calls == []

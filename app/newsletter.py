@@ -147,16 +147,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         ),
     )
     ed: _Edition = res.parsed
-    tropes = style.find_tropes(f"{ed.subject}\n{ed.markdown}", long_form=True)
-    if len(tropes) >= 2:
-        try:
-            ed = llm.generate(
-                purpose="newsletter_revise", role="newsletter", system=system,
-                user=f"{user}\n\nYour draft:\n{ed.model_dump_json()}\n\n{style.revision_note(tropes)}",
-                max_tokens=12000, effort="low", schema=_Edition, critical=critical, fake=lambda: ed,
-            ).parsed
-        except llm.LlmError:
-            pass  # keep the first draft
+    ed = style.polish(ed, purpose="newsletter", role="newsletter", system=system, user=user,
+                      critical=critical, long_form=True, max_tokens=12000)
     kicker = f"{name} · {now_et:%a %b %-d} · {'Morning' if edition == 'am' else 'Evening'}"
     html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker, emailer.footer(), ed.preheader)
     key = f"daily:{now_et:%Y-%m-%d}:{edition}"
