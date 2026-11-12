@@ -121,16 +121,29 @@ def coverage_gaps(session: Session, min_agents: int = 2) -> list[str]:
 
 
 def bootstrap(session: Session, count: int = 8, max_total: int = 11) -> list[Agent]:
-    """Create the cast. Later members are nudged toward topics nobody covers yet."""
-    created = []
-    while len(created) < count:
-        gaps = coverage_gaps(session) if created else []
-        created.append(create_persona(session, needs_voices_for=gaps or None))
-    # Top up until every topic has at least two people who care.
-    total = len(list(session.scalars(select(Agent).where(Agent.active))))
-    while coverage_gaps(session) and total < max_total:
-        created.append(create_persona(session, needs_voices_for=coverage_gaps(session)))
-        total += 1
+    """Fill the cast up to `count` active members, then top up any topic with fewer than two.
+
+    A refused or failed persona is skipped (with a few extra attempts), not fatal.
+    """
+    created: list[Agent] = []
+    attempts = 0
+
+    def active() -> int:
+        return len(list(session.scalars(select(Agent).where(Agent.active))))
+
+    def try_create(gaps):
+        nonlocal attempts
+        attempts += 1
+        try:
+            created.append(create_persona(session, needs_voices_for=gaps or None))
+        except (llm.LlmError, llm.BudgetExceeded) as e:
+            session.rollback()
+            log.warning("persona creation skipped: %s", e)
+
+    while active() < count and attempts < count + 4:
+        try_create(coverage_gaps(session) if active() else [])
+    while coverage_gaps(session) and active() < max_total and attempts < max_total + 4:
+        try_create(coverage_gaps(session))
     return created
 
 

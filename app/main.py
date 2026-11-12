@@ -502,10 +502,10 @@ def agent_page(request: Request, handle: str, user=Depends(require_user), sessio
 @app.post("/agents/create")
 def create_agents(request: Request, background: BackgroundTasks, count: int = Form(1),
                   user=Depends(require_user), session: Session = Depends(get_session)):
-    has_agents = session.scalar(select(Agent.id).limit(1)) is not None
-    if not has_agents:
+    active = session.scalar(select(func.count(Agent.id)).where(Agent.active)) or 0
+    if active < 8:
         background.add_task(jobs.run_named, "bootstrap")
-        flash(request, "Creating the cast. Each agent writes its own persona; refresh in a few minutes.")
+        flash(request, "Filling out the cast to 8. Each agent writes its own persona; refresh in a few minutes.")
     else:
         for _ in range(max(1, min(count, 3))):
             background.add_task(run_bg, lambda s: personas.create_persona(s, personas.coverage_gaps(s) or None))

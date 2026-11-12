@@ -101,3 +101,29 @@ def test_suggestions_accept_null_fields():
     assert s.urgent is False
     assert _source_config(s.sources[0]) == {"url": "https://x.example/feed"}
     assert _source_config(s.sources[1]) == {"query": "road mile races"}
+
+
+def test_bootstrap_skips_a_refused_persona(monkeypatch):
+    from app import llm, personas
+    from app.db import init_db, session_scope
+    from app.models import Agent
+
+    init_db()
+    real = personas.create_persona
+    calls = {"n": 0}
+
+    def flaky(session, needs_voices_for=None):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise llm.LlmError("model declined (persona)")
+        return real(session, needs_voices_for)
+
+    monkeypatch.setattr(personas, "create_persona", flaky)
+    with session_scope() as s:
+        for a in s.scalars(personas.select(Agent)):
+            a.active = False
+        s.flush()
+        personas.bootstrap(s, count=3, max_total=3)
+        assert len(list(s.scalars(personas.select(Agent).where(Agent.active)))) == 3
+        for a in s.scalars(personas.select(Agent)):
+            s.delete(a)
