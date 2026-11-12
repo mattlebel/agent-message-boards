@@ -161,6 +161,7 @@ def generate(
     schema: Optional[Type[BaseModel]] = None,
     web_search: bool = False,
     max_searches: int = 3,
+    web_fetch: bool = False,
     allowed_domains: Optional[list[str]] = None,
     critical: bool = False,
     fake: Optional[Callable[[], Any]] = None,
@@ -199,16 +200,23 @@ def generate(
     if model in FALLBACK_MODELS:
         kwargs["betas"] = [FALLBACK_BETA]
         kwargs["fallbacks"] = "default"
+    tools = []
     if web_search:
         tool_type = "web_search_20250305" if "haiku" in model else "web_search_20260209"
         tool = {"type": tool_type, "name": "web_search", "max_uses": max_searches}
         if allowed_domains:
             tool["allowed_domains"] = allowed_domains
-        kwargs["tools"] = [tool]
+        tools.append(tool)
+    if web_fetch:
+        # Fetches only URLs already in the conversation, from Anthropic's servers.
+        tool_type = "web_fetch_20250910" if "haiku" in model else "web_fetch_20260209"
+        tools.append({"type": tool_type, "name": "web_fetch", "max_uses": 2})
+    if tools:
+        kwargs["tools"] = tools
 
     messages_api = client().beta.messages
     try:
-        if schema is not None and not web_search:
+        if schema is not None and not tools:
             resp = messages_api.parse(output_format=schema, **kwargs)
             total_cost = cost_of(model, resp.usage)
             _record(purpose, model, resp.usage, 0, total_cost)

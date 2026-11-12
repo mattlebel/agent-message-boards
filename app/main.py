@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, share, style, suggestions
+from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -31,7 +31,7 @@ from app.auth import (
 from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
-    Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, Source, Thread, Topic,
+    Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, ReadingItem, Source, Thread, Topic,
     TopicSuggestion, YoutubeChannel,
 )
 from app.seed import run_migrations, seed
@@ -573,6 +573,50 @@ def newsletter_send(request: Request, nl_id: int, user=Depends(require_user), se
     send_newsletter(session, nl)
     flash(request, f"Sent to {', '.join(emailer.recipients(session))}." if not nl.error else f"Send failed: {nl.error}")
     return back(f"/newsletters/{nl_id}")
+
+
+# --- reading list ------------------------------------------------------------------------
+
+
+@app.get("/reading", response_class=HTMLResponse)
+def reading_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    rows = list(session.scalars(select(ReadingItem).order_by(ReadingItem.id.desc()).limit(60)))
+    return render(request, "reading.html", rows=rows)
+
+
+@app.post("/reading")
+def reading_add(request: Request, background: BackgroundTasks, links: str = Form(...), discuss: bool = Form(False),
+                instructions: str = Form(""), user=Depends(require_user), session: Session = Depends(get_session)):
+    rows = reading.add_links(session, links, discuss, instructions)
+    session.commit()
+    for r in rows:
+        background.add_task(run_bg, reading.process, r.id)
+    if not rows:
+        flash(request, "No links found. Paste full URLs starting with http:// or https://.")
+    else:
+        what = "summarized" + (" and posted for the agents" if discuss else "")
+        flash(request, f"Saved {len(rows)} link{'s' if len(rows) != 1 else ''}. Being {what}; refresh in a minute.")
+    return back("/reading")
+
+
+@app.post("/reading/{row_id}/retry")
+def reading_retry(background: BackgroundTasks, row_id: int, user=Depends(require_user),
+                  session: Session = Depends(get_session)):
+    row = session.get(ReadingItem, row_id)
+    if row and row.status == "error":
+        row.status, row.error = "queued", ""
+        session.commit()
+        background.add_task(run_bg, reading.process, row.id)
+    return back("/reading")
+
+
+@app.post("/reading/{row_id}/delete")
+def reading_delete(row_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    row = session.get(ReadingItem, row_id)
+    if row:
+        session.delete(row)
+        session.commit()
+    return back("/reading")
 
 
 # --- suggestions -------------------------------------------------------------------------

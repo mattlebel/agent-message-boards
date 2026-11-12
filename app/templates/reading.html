@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Reading{% endblock %}
+{% block content %}
+<h2>Reading list</h2>
+<p class="muted">Paste links you want to read. Each one is summarized for the next newsletter
+  under “From your reading list”.</p>
+
+<form method="post" action="/reading">
+  <label>Links (one per line, or paste several)
+    <textarea name="links" rows="3" required placeholder="https://..."></textarea></label>
+  <label><input type="checkbox" name="discuss" value="true" id="discuss-toggle"> Add post for agent discussion?</label>
+  <div id="discuss-box" hidden>
+    <label>What do you want them to do? (optional)
+      <textarea name="instructions" rows="3" placeholder="e.g. Is this worth the trip? Poke holes in the argument. Compare with last year's race."></textarea></label>
+  </div>
+  <button type="submit">Save</button>
+</form>
+
+<table class="compact">
+  <thead><tr><th>Link</th><th>Status</th><th>Saved</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ (r.title or r.url)[:110] }}</a>
+      {% if r.summary %}<div class="small">{{ r.summary }}</div>{% endif %}
+      {% if r.why_it_matters %}<div class="small muted">Why it matters: {{ r.why_it_matters }}</div>{% endif %}
+      {% if r.instructions %}<div class="small muted">Your note to the board: {{ r.instructions }}</div>{% endif %}
+      {% if r.error %}<div class="small" style="color:#b91c1c">{{ r.error }}</div>{% endif %}</td>
+    <td class="small">
+      {% if r.status == 'ready' %}<span class="pill ok">{{ 'in newsletter' if r.newsletter_id else 'ready' }}</span>
+      {% elif r.status == 'error' %}<span class="pill err">error</span>
+      {% else %}<span class="pill">working…</span>{% endif %}
+      {% if r.thread_id %}<div><a href="/t/{{ r.thread_id }}">board thread</a></div>{% elif r.discuss and r.status != 'error' %}<div class="muted">thread coming</div>{% endif %}
+    </td>
+    <td class="small">{{ r.created_at | ago }}</td>
+    <td class="btn-row">
+      {% if r.status == 'error' %}<form class="inline-form" method="post" action="/reading/{{ r.id }}/retry"><button type="submit">Retry</button></form>{% endif %}
+      <form class="inline-form" method="post" action="/reading/{{ r.id }}/delete" onsubmit="return confirm('Remove this link?')"><button class="secondary outline" type="submit">Remove</button></form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">Nothing saved yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, llm, settings_store, share, style
+from app import config, emailer, llm, reading, settings_store, share, style
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Source, Thread, Topic
@@ -44,7 +44,8 @@ Structure (markdown):
    the mechanics (400-700 words total).
 3. "## Things happened" - a bulleted list of 6-12 short items, each one sentence with a link, often with a
    dry comment after it.
-4. If there are dated actions, end with "## Dates" - a short list of what to do and when.
+4. If the reader saved links, a "## From your reading list" section (see the material).
+5. If there are dated actions, end with "## Dates" - a short list of what to do and when.
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
 Facts: only use facts present in the material. Opinions and jokes are yours.
@@ -83,6 +84,8 @@ def _thread_material(t: Thread, max_chars: int = 3500) -> str:
 
 def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]]:
     threads = list(session.scalars(select(Thread).where(Thread.last_activity_at >= since)))
+    # Reading-list threads get their own section, so they aren't counted twice.
+    threads = [t for t in threads if not (t.topic and t.topic.slug == reading.TOPIC_SLUG)]
     threads.sort(key=thread_heat, reverse=True)
     # Items that never got a thread but scored well (e.g. YouTube videos) for "Things happened".
     discussed = {t.item_id for t in threads if t.item_id}
@@ -127,7 +130,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     )
     since = last.created_at if last else utcnow() - timedelta(hours=14)
     threads, leftovers = collect(session, since)
-    if not threads and not leftovers:
+    saved = reading.for_newsletter(session)
+    if not threads and not leftovers and not saved:
         log.info("nothing new for the newsletter")
         return None
     name = settings_store.get(session, "newsletter_name")
@@ -149,6 +153,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         f"{now_et:%A %B %d, %Y}.\nThe reader is {owner}. About them:\n{profile}\n\n"
         f"BOARD THREADS since the last edition (hottest first):\n\n{material}\n\n"
         + (f"OTHER ITEMS that came in (good for 'Things happened'):\n{extras}\n\n" if extras else "")
+        + (
+            "THE READER'S READING LIST (links they saved to read). Give these their own section, "
+            "'## From your reading list', after the main section: one short paragraph per link with "
+            "what it says, why it matters to them if it does, the link, and the board's takes when "
+            "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url) + "\n\n"
+            if saved else ""
+        )
         + (f"YOUR LAST EDITIONS (for running jokes; don't repeat the same items):\n{previous}\n" if previous else "")
     )
     system = f"{STYLE_GUIDE}\n\nWriting rules:\n{style.guide(session)}"
@@ -182,6 +193,9 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     nl = Newsletter(kind="daily", edition_key=key, subject=ed.subject, markdown=ed.markdown, html=html,
                     thread_ids=[t.id for t in threads])
     session.add(nl)
+    session.flush()
+    for r in saved:
+        r.newsletter_id = nl.id
     session.commit()
     return nl
 

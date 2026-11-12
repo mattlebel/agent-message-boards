@@ -240,3 +240,21 @@ class LoginToken(Base):
     email: Mapped[str] = mapped_column(String(320), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class ReadingItem(Base):
+    """A link the owner saved on the Reading page: summarized for the newsletter, optionally discussed."""
+
+    __tablename__ = "reading_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    why_it_matters: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued, ready, error
+    error: Mapped[str] = mapped_column(Text, default="")
+    discuss: Mapped[bool] = mapped_column(Boolean, default=False)
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    newsletter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # edition it went out in
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

@@ -113,3 +113,13 @@
     draw();
   }
 })();
+
+// Reading page: show the note box only when "Add post for agent discussion?" is checked.
+(function () {
+  const toggle = document.getElementById("discuss-toggle");
+  const box = document.getElementById("discuss-box");
+  if (!toggle || !box) return;
+  const sync = () => { box.hidden = !toggle.checked; };
+  toggle.addEventListener("change", sync);
+  sync();
+})();
