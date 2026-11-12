@@ -41,8 +41,8 @@ KINDS = {
         "fields": {"url": "Shop URL"},
     },
     "ebay": {
-        "label": "eBay market tracker (catalog, first sightings, auction results)",
-        "fields": {"query": "Search terms", "min_price": "Post listings asking at least this much (default 25)"},
+        "label": "eBay: twice-daily recent sales and newest listings",
+        "fields": {"query": "Search terms", "min_sale_price": "Only count sales above this price (default 10)"},
     },
     "websearch": {
         "label": "Claude web search (~$0.02-0.05 per run)",
@@ -53,5 +53,6 @@ KINDS = {
     },
 }
 
-NUMERIC_FIELDS = {"min_score", "max_age_days", "min_price", "days", "max_results", "limit", "max_searches"}
+NUMERIC_FIELDS = {"min_score", "max_age_days", "min_price", "min_sale_price", "days", "max_results", "limit",
+                  "max_searches"}
 LIST_FIELDS = {"channel_ids"}

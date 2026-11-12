@@ -30,6 +30,16 @@ def fetch_one(session: Session, source: Source) -> list[Item]:
         session.commit()
         return []
 
+    new = store_raw(session, source, raws)
+    source.last_ok_at = utcnow()
+    source.last_error = ""
+    source.last_count = len(new)
+    session.commit()
+    return new
+
+
+def store_raw(session: Session, source: Source, raws) -> list[Item]:
+    """Save RawItems from a source as new Items, skipping duplicates and anything too old."""
     max_age = timedelta(days=float((source.config or {}).get("max_age_days", 7)))
     cutoff = utcnow() - max_age
     recent_cutoff = utcnow() - timedelta(days=14)
@@ -42,7 +52,7 @@ def fetch_one(session: Session, source: Source) -> list[Item]:
         key = dedupe_key(r.key)
         if key in seen_keys or session.scalar(select(Item.id).where(Item.dedupe_key == key)):
             continue
-        if r.url and session.scalar(
+        if r.url and (r.extra or {}).get("kind") != "ebay_digest" and session.scalar(
             select(Item.id).where(Item.url == r.url, Item.fetched_at >= recent_cutoff).limit(1)
         ):
             continue  # same link already came in through another source
@@ -60,10 +70,7 @@ def fetch_one(session: Session, source: Source) -> list[Item]:
         )
         session.add(item)
         new.append(item)
-    source.last_ok_at = utcnow()
-    source.last_error = ""
-    source.last_count = len(new)
-    session.commit()
+    session.flush()
     return new
 
 

@@ -221,6 +221,10 @@ def start_thread(session: Session, item: Item, critical: bool = False, alert: bo
     user = (
         f"Today is {today}. Start a new thread in the '{topic.name}' section about this:\n\n{_material(item)}\n\n"
         + ("This is URGENT: a new drop/announcement the owner may want to travel for. Make that clear.\n" if alert else "")
+        + ("This is the twice-daily eBay digest. Don't repeat the list. Point out what stands out (the top "
+           "prices, collabs or venue exclusives, anything unusual) and what it means for @owner as a "
+           "collector. It's a sample of eBay, not everything listed, so make no claims about rarity or "
+           "how many exist based on it.\n" if (item.extra or {}).get("kind") == "ebay_digest" else "")
         + "Lead with the facts from the material: what it is, the details that matter (dates, prices, places, "
         "deadlines) and the link. Then add your take only if it's specific and not obvious; otherwise stop "
         "after the facts. "

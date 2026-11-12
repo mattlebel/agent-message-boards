@@ -42,8 +42,8 @@ TOPICS = [
                 "query": "Inciardi mini prints collectors: new prints pulled, rare finds, trades, machine restocks",
                 "domains": "instagram.com, tiktok.com",
                 "days": 5}},
-            {"kind": "ebay", "name": "eBay market tracker", "interval_minutes": 120, "config": {
-                "query": "inciardi print", "min_price": 25}},
+            {"kind": "ebay", "name": "eBay sales and new listings", "interval_minutes": 30, "config": {
+                "query": "inciardi print", "min_sale_price": 10}},
             {"kind": "websearch", "name": "Depop / Mercari / Etsy resale", "interval_minutes": 4320, "config": {
                 "query": "Inciardi mini print listings for sale, especially rare, custom, exclusive or collab prints, with prices",
                 "domains": "depop.com, mercari.com, etsy.com, poshmark.com",
@@ -207,9 +207,29 @@ def _haiku_for_running_searches(session: Session) -> str:
     return f"{len(rows)} running searches now use Haiku"
 
 
+def _ebay_digests(session: Session) -> str:
+    """eBay switches from one post per listing to two digests a day (recent sales, newest listings)."""
+    from app.models import Item
+
+    srcs = list(session.scalars(select(Source).where(Source.kind == "ebay")))
+    for src in srcs:
+        src.config = {"query": (src.config or {}).get("query") or "inciardi print", "min_sale_price": 10}
+        src.interval_minutes = 30
+        src.state = {}
+        if src.name == "eBay market tracker":
+            src.name = "eBay sales and new listings"
+    skipped = 0
+    for item in session.scalars(select(Item).where(Item.status.in_(["new", "scored", "picked"]))):
+        if (item.extra or {}).get("source_kind") == "ebay":
+            item.status = "skipped"
+            skipped += 1
+    return f"{len(srcs)} eBay sources switched to digests, {skipped} single-listing items skipped"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
+    ("2026-11-12-ebay-digests", _ebay_digests),
 ]
 
 

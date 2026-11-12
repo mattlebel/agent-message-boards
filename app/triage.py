@@ -58,6 +58,9 @@ def triage(session: Session) -> int:
             select(Item).join(Topic).where(Item.status == "new", Topic.active).order_by(Item.id)
         )
     )
+    for it in [i for i in items if (i.extra or {}).get("kind") == "ebay_digest"]:
+        it.score, it.triage_note, it.status = 9.0, "Twice-daily eBay digest", "scored"
+    items = [i for i in items if i.status == "new"]
     if not items:
         return 0
     profile = settings_store.get(session, "profile")
@@ -129,9 +132,13 @@ def pick_for_discussion(session: Session, n: int) -> list[Item]:
     by_topic: dict[int, list[Item]] = defaultdict(list)
     for it in sorted(candidates, key=rank, reverse=True):
         by_topic[it.topic_id].append(it)
-    picked: list[Item] = []
+    # eBay digests always get a thread; they don't use up the regular slots.
+    picked: list[Item] = [i for i in candidates if (i.extra or {}).get("kind") == "ebay_digest"]
+    for q in by_topic.values():
+        q[:] = [i for i in q if i not in picked]
+    n += len(picked)
     # Round-robin through topics, best topic first.
-    queues = sorted(by_topic.values(), key=lambda q: rank(q[0]), reverse=True)
+    queues = sorted((q for q in by_topic.values() if q), key=lambda q: rank(q[0]), reverse=True)
     while len(picked) < n and any(queues):
         for q in queues:
             if q and len(picked) < n:

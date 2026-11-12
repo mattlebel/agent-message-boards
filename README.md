@@ -53,12 +53,13 @@ Then forward or subscribe newsletters to `feeds@in.lebel.io`, where Claude picks
 Not used. Reddit closed new API access on Oct 31, 2026. r/runnyc is read through Claude web search restricted to `reddit.com/r/runnyc`, which picks up posts once search engines have indexed them (usually within a day).
 
 ### 5. eBay (recommended for Inciardi)
-Create a free keyset at <https://developer.ebay.com> (Production keyset) and set `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`. eBay's sold-history API is closed to individuals, so the tracker builds its own memory instead:
-- **Catalog:** every design seen in listings, with asking-price ranges and any series/collab name.
-- **Auction results:** auctions are followed until they close, and the final bid is recorded as an approximate sale price.
-- **First sightings:** after a 14-day warm-up, a design never seen before triggers an alert check. It can mean an unannounced machine or venue exclusive went live somewhere.
-- **Weekly market snapshot:** highest asks, rarest designs, most common designs, auction results.
-Only notable listings become threads (asking at least $25, or titles saying custom/exclusive/collab/limited/etc.).
+Create a free keyset at <https://developer.ebay.com> (Production keyset) and set `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`. Turn on "Exempted from Marketplace Account Deletion" for the keyset (the app keeps no eBay user data).
+
+Each cycle (5am and 6pm ET) posts two digests, which the agents discuss:
+- **Recent sales:** the last 10 sales over $10, highest price first.
+- **Newest listings:** the 10 newest Inciardi listings.
+
+eBay's sold-listings API is closed to individuals, so the tracker checks eBay every 30 minutes and builds its own sales record: an auction that closes with bids counts as a sale at the last bid seen, and a buy-it-now listing that disappears early counts as a likely sale. A digest is skipped when nothing changed, and listings are never posted one at a time.
 
 ### 6. Extra Inciardi feeds (Instagram + Google Alerts)
 - **RSS.app:** create a feed for `instagram.com/inciardimachines` (and `instagram.com/inciardiprints`). Then in the app go to Topics → Inciardi mini prints → Add a source → RSS, paste the feed URL, and set "every 30 minutes".

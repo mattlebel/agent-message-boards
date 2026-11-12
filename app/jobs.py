@@ -55,11 +55,26 @@ def hot(session: Session) -> str:
     return f"{len(new)} new items, {alerts} alerts"
 
 
+def ebay_digests(session: Session) -> list:
+    """Twice a day: the recent-sales and newest-listings posts for each eBay source."""
+    from app.models import Source, Topic
+    from app.sources import ebay
+
+    made = []
+    for src in session.scalars(select(Source).join(Topic).where(Source.kind == "ebay", Source.active, Topic.active)):
+        if not src.last_ok_at:
+            continue  # nothing tracked yet
+        made += ingest.store_raw(session, src, ebay.build_digests(src))
+    session.commit()
+    return made
+
+
 def cycle(session: Session) -> str:
     if not session.scalar(select(Agent.id).limit(1)):
         personas.bootstrap(session)
     inbound.process_pending(session)
     new = ingest.run_ingest(session)
+    new += ebay_digests(session)
     alerts = alerts_for_pending(session)
     scored = triage.triage(session)
     n = int(settings_store.get(session, "threads_per_cycle"))
