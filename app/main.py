@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions
+from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions, youtube
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -703,7 +703,8 @@ async def resend_webhook(request: Request, background: BackgroundTasks):
 @app.get("/youtube", response_class=HTMLResponse)
 def youtube_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
     channels = list(session.scalars(select(YoutubeChannel).order_by(YoutubeChannel.title)))
-    return render(request, "youtube.html", channels=channels, google=bool(config.GOOGLE_CLIENT_ID))
+    return render(request, "youtube.html", channels=channels, google=bool(config.GOOGLE_CLIENT_ID),
+                  unresolved=settings_store.get(session, "youtube_unresolved") or [])
 
 
 @app.get("/youtube/connect")
@@ -768,25 +769,19 @@ async def youtube_csv(request: Request, file: UploadFile, user=Depends(require_u
 
 
 @app.post("/youtube/add")
-def youtube_add(request: Request, value: str = Form(...), user=Depends(require_user), session: Session = Depends(get_session)):
-    value = value.strip()
-    m = re.search(r"(UC[\w-]{20,})", value)
-    cid, title = (m.group(1) if m else ""), ""
-    if not cid:
-        url = value if value.startswith("http") else f"https://www.youtube.com/{value if value.startswith('@') else '@' + value}"
-        try:
-            page = httpx.get(url, timeout=15, follow_redirects=True, headers={"User-Agent": config.USER_AGENT}).text
-            m = re.search(r'"(?:channelId|externalId)":"(UC[\w-]{20,})"', page)
-            cid = m.group(1) if m else ""
-            t = re.search(r"<title>(.*?)</title>", page)
-            title = html_lib.unescape(t.group(1).replace(" - YouTube", "")) if t else ""
-        except httpx.HTTPError:
-            pass
-    if not cid:
-        flash(request, "Couldn't find a channel ID there. Paste the channel URL or its UC… ID.")
+def youtube_add(request: Request, background: BackgroundTasks, value: str = Form(...),
+                user=Depends(require_user), session: Session = Depends(get_session)):
+    values = youtube.parse_channels(value)[:300]
+    if not values:
+        flash(request, "No channels found. Paste @handles, channel URLs or UC… ids.")
+    elif len(values) == 1:
+        added, missing = youtube.add_many(session, values)
+        flash(request, "Channel added." if added else ("Already added." if not missing else
+              f"Couldn't find {missing[0]} on YouTube. Check the spelling, or paste the channel URL."))
     else:
-        _save_channels(session, [(cid, title)], "manual")
-        flash(request, "Channel added.")
+        background.add_task(run_bg, youtube.import_in_background, values)
+        flash(request, f"Looking up {len(values)} channels. Refresh in a minute; any that couldn't be found "
+                       "will be listed below.")
     return back("/youtube")
 
 

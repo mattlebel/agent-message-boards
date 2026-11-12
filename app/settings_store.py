@@ -51,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
     "style_guide": "",  # empty = built-in anti-"LLM speak" rules in app/style.py
     "paused": False,
     "applied_migrations": [],
+    "youtube_unresolved": [],
 }
 
 

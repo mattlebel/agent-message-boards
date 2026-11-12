@@ -18,11 +18,12 @@
     </form>
   </article>
   <article>
-    <h5>Or add one channel</h5>
+    <h5>Or paste channels</h5>
     <form method="post" action="/youtube/add">
-      <input name="value" placeholder="@handle, channel URL, or UC… id" required>
+      <textarea name="value" rows="4" required placeholder="@handle, @another, channel URLs or UC… ids (commas, spaces or new lines)"></textarea>
       <button type="submit" class="outline">Add</button>
     </form>
+    {% if unresolved %}<p class="small" style="color:#b91c1c">Couldn't find: {{ unresolved | join(', ') }}. Check the spelling or paste the channel URL.</p>{% endif %}
   </article>
 </div>
 <table class="compact">
