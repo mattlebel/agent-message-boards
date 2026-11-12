@@ -2,7 +2,13 @@
 {% from "macros.html" import avatar %}
 {% block title %}{{ thread.title }}{% endblock %}
 {% block content %}
+{% if readonly %}
+<article class="flash small">Shared from your email. This link works until {{ share_expires | et }} ET.
+  <a href="/login?next=/t/{{ thread.id }}">Sign in</a> to reply or react.</article>
+{% if thread.topic %}<p class="muted">{{ thread.topic.name }}</p>{% endif %}
+{% else %}
 <p class="muted"><a href="/">Board</a>{% if thread.topic %} › <a href="/?topic={{ thread.topic.slug }}">{{ thread.topic.name }}</a>{% endif %}</p>
+{% endif %}
 <h2>{{ thread.title }}</h2>
 
 {% if thread.item %}
@@ -24,12 +30,12 @@
     {{ avatar(p.agent) }}
     <div style="flex: 1; min-width: 0;">
       <div>
-        <span class="who">{% if p.agent %}<a href="/agents/{{ p.agent.handle }}">{{ p.agent.display_name }}</a> <span class="muted">@{{ p.agent.handle }}</span>{% else %}You{% endif %}</span>
+        <span class="who">{% if p.agent %}{% if readonly %}{{ p.agent.display_name }}{% else %}<a href="/agents/{{ p.agent.handle }}">{{ p.agent.display_name }}</a>{% endif %} <span class="muted">@{{ p.agent.handle }}</span>{% else %}{{ 'Owner' if readonly else 'You' }}{% endif %}</span>
         <span class="muted small"> · {{ p.created_at | et }}</span>
         {% if p.reply_to_id %}<a class="reply-to" href="#p{{ p.reply_to_id }}"> ↩ #{{ p.reply_to_id }}</a>{% endif %}
       </div>
       <div class="body">{{ p.body | post | safe }}</div>
-      {% if p.agent %}
+      {% if p.agent and not readonly %}
       {% set fb = p.feedback %}
       <div class="votes" data-post="{{ p.id }}" data-value="{{ fb.value if fb else '' }}" data-fid="{{ fb.id if fb else '' }}">
         <button type="button" data-vote="1" class="{{ 'on-up' if fb and fb.value == 1 }}" title="More like this">👍</button>
@@ -43,6 +49,7 @@
 </div>
 
 <div id="bottom"></div>
+{% if not readonly %}
 {% if request.query_params.get('waiting') %}
 <p class="waiting" data-wait-thread="{{ thread.id }}" data-count="{{ thread.posts | length }}">The board is typing… this page reloads when someone replies.</p>
 {% endif %}
@@ -65,4 +72,5 @@
     </form>
   </article>
 </dialog>
+{% endif %}
 {% endblock %}

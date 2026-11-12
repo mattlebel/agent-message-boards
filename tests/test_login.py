@@ -77,3 +77,55 @@ def test_public_pages_dont_reveal_the_allowed_domain(monkeypatch):
     assert domain not in client.get("/login").text
     r = client.post("/auth/email", data={"email": "someone@example.com"})
     assert domain not in r.text
+
+
+def test_email_share_links(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from app import share
+    from app.db import session_scope
+    from app.models import Newsletter, Post, Thread
+    from app.newsletter import send_newsletter
+
+    client, sent = _setup(monkeypatch)
+    with session_scope() as s:
+        a = Thread(title="Holiday Drop thread")
+        b = Thread(title="Other thread")
+        s.add_all([a, b])
+        s.flush()
+        a.posts.append(Post(body="Mystery packs Friday at noon."))
+        a_id, b_id = a.id, b.id
+
+    now = datetime.now(timezone.utc)
+    good = share.make_token(a_id, now + timedelta(hours=24))
+
+    page = client.get(f"/t/{a_id}", params={"k": good})
+    assert page.status_code == 200 and "Holiday Drop thread" in page.text
+    assert "Post reply" not in page.text and "noindex" in page.text
+
+    expired = share.make_token(a_id, now - timedelta(minutes=1))
+    assert "expired" in client.get(f"/t/{a_id}", params={"k": expired}).text
+    assert "expired" in client.get(f"/t/{b_id}", params={"k": good}).text  # key is for another thread
+    assert "expired" in client.get(f"/t/{a_id}", params={"k": good + "x"}).text  # tampered
+    assert client.get(f"/t/{a_id}", follow_redirects=False).headers["location"].startswith("/login")
+
+    # Links get keys at send time, fragments survive, other URLs don't change.
+    base = config.BASE_URL
+    html = f'<a href="{base}/t/{a_id}#p3">x</a> <a href="{base}/t/{a_id}/count">c</a> <a href="https://x.example/t/{a_id}">o</a>'
+    out = share.tokenize_links(html)
+    assert f"{base}/t/{a_id}?k=" in out and out.count("?k=") == 1 and "#p3" in out
+
+    captured = []
+    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="": captured.append(html) or "id")
+    with session_scope() as s:
+        nl = Newsletter(kind="daily", subject="s", markdown=f"{base}/t/{a_id}", html=f'<a href="{base}/t/{a_id}">t</a>')
+        s.add(nl)
+        s.flush()
+        send_newsletter(s, nl)
+        assert "?k=" not in nl.html  # stored copy keeps plain links
+    assert "?k=" in captured[0]
+    with session_scope() as s:  # leave the shared test DB as we found it
+        for t in s.scalars(select(Thread).where(Thread.id.in_([a_id, b_id]))):
+            s.delete(t)

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, llm, settings_store, style
+from app import config, emailer, llm, settings_store, share, style
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Thread, Topic
@@ -164,9 +164,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
 
 def send_newsletter(session: Session, nl: Newsletter, to: list[str] | None = None,
                     scheduled_at: datetime | None = None) -> None:
+    # Board links get a share key that works for 24 hours after delivery, without signing in.
+    # The stored copy keeps plain links (the admin view is behind sign-in anyway).
+    html = share.tokenize_links(nl.html, scheduled_at)
+    text = share.tokenize_links(nl.markdown, scheduled_at)
     try:
         nl.resend_id = emailer.send(
-            to or emailer.recipients(session), nl.subject, nl.html, nl.markdown,
+            to or emailer.recipients(session), nl.subject, html, text,
             scheduled_at=scheduled_at.isoformat() if scheduled_at else "",
         )
         nl.sent_at = utcnow()

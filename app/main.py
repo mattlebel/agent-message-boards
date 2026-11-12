@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, style, suggestions
+from app import config, discussion, emailer, ingest, jobs, llm, personas, settings_store, share, style, suggestions
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -249,11 +249,24 @@ def board(request: Request, topic: str = "", page: int = 1, user=Depends(require
 
 
 @app.get("/t/{thread_id}", response_class=HTMLResponse)
-def thread_page(request: Request, thread_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+def thread_page(request: Request, thread_id: int, k: str = "", session: Session = Depends(get_session)):
+    user = current_user(request)
+    if user is None:
+        # A share link from an email opens this one thread, read-only, until it expires.
+        expires = share.check_token(thread_id, k) if k else None
+        if expires is None:
+            if k:
+                return render(request, "share_expired.html", next=f"/t/{thread_id}", nav="")
+            raise LoginRequired()
+        thread = session.get(Thread, thread_id)
+        if thread is None:
+            raise HTTPException(404)
+        return render(request, "thread.html", thread=thread, nav="", readonly=True,
+                      share_expires=expires.replace(tzinfo=None))
     thread = session.get(Thread, thread_id)
     if thread is None:
         raise HTTPException(404)
-    return render(request, "thread.html", thread=thread, nav="board")
+    return render(request, "thread.html", thread=thread, nav="board", readonly=False)
 
 
 @app.get("/t/{thread_id}/count")

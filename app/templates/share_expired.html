@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<meta name="robots" content="noindex, nofollow">
+<article style="max-width: 420px; margin: 4rem auto; text-align: center;">
+  <h2>📋 The Board</h2>
+  <p><b>This link has expired.</b></p>
+  <p class="muted">Links in emails work for 24 hours. Sign in to see the thread.</p>
+  <a role="button" href="/login?next={{ next | urlencode }}">Sign in</a>
+</article>
+{% endblock %}
