@@ -10,9 +10,10 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from lxml import etree
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app import config
+from app import llm as llm_models
 from app.db import utcnow
 from app.sources.base import RawItem, SourceError, get, html_to_text
 
@@ -188,14 +189,14 @@ def fetch_shopify(source, session) -> list[RawItem]:
 # --- websearch (Claude with the web search tool) ---------------------------------
 
 
-class _Found(BaseModel):
-    title: str
-    url: str
+class _Found(llm_models.Lenient):
+    title: str = ""
+    url: str = ""
     summary: str = ""
     published: str = Field(default="", description="ISO date if known")
 
 
-class _FoundList(BaseModel):
+class _FoundList(llm_models.Lenient):
     items: list[_Found] = Field(default_factory=list)
 
 

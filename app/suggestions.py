@@ -20,15 +20,14 @@ from app.sources import KINDS
 log = logging.getLogger(__name__)
 
 
-class _SuggestedSource(BaseModel):
-    kind: str = Field(description="One of: rss, reddit, page_watch, sitemap, websearch")
-    name: str
+class _SuggestedSource(llm.Lenient):
+    kind: str = Field(description="One of: rss, page_watch, sitemap, websearch")
+    name: str = ""
     url: str = Field(default="", description="Feed/page/sitemap URL for rss, page_watch, sitemap")
-    subreddit: str = Field(default="", description="For reddit")
     query: str = Field(default="", description="For websearch")
 
 
-class _Suggestion(BaseModel):
+class _Suggestion(llm.Lenient):
     name: str
     description: str = Field(description="Brief for the agents: what to watch for and what the reader cares about")
     why: str = Field(description="1-2 sentences to the reader on why they'd like it. Specific, a little surprising.")
@@ -36,7 +35,7 @@ class _Suggestion(BaseModel):
     sources: list[_SuggestedSource]
 
 
-class _Suggestions(BaseModel):
+class _Suggestions(llm.Lenient):
     suggestions: list[_Suggestion]
 
 
@@ -45,8 +44,6 @@ def slugify(name: str) -> str:
 
 
 def _source_config(s: _SuggestedSource) -> dict:
-    if s.kind == "reddit":
-        return {"subreddit": s.subreddit.removeprefix("r/")}
     if s.kind == "websearch":
         return {"query": s.query or s.name}
     return {"url": s.url}
@@ -80,10 +77,11 @@ def generate(session: Session) -> list[TopicSuggestion]:
         + "\n\nSuggest 6 NEW topics this person would probably never think to add but would love. Mix: "
         "2 close to existing interests (adjacent niches), 2 that connect two of their interests in a surprising way, "
         "2 wildcards that fit who they are. Use web search to find real, currently active sources for each "
-        "(RSS feeds, subreddits, pages that list events or drops). Prefer RSS feeds and pages with stable URLs. "
-        "Note: Reddit's public API is closing to new apps, so don't make a topic depend only on Reddit; add a websearch source "
-        "as a fallback when in doubt. Each topic needs 1-3 sources. Respond with JSON only: "
-        '{"suggestions": [{"name", "description", "why", "urgent", "sources": [{"kind", "name", "url", "subreddit", "query"}]}]}'
+        "(RSS feeds, pages that list events or drops). Prefer RSS feeds and pages with stable URLs. "
+        "Don't use Reddit or Threads as sources: the board can't read them. Add a websearch source as a "
+        "fallback when in doubt. Each topic needs 1-3 sources. Use an empty string for any field that doesn't "
+        "apply. Respond with JSON only: "
+        '{"suggestions": [{"name", "description", "why", "urgent", "sources": [{"kind", "name", "url", "query"}]}]}'
     )
     res = llm.generate(
         purpose="suggestions",

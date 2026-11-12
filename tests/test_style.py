@@ -86,3 +86,18 @@ def test_websearch_drops_blocked_domains(monkeypatch):
     only_reddit = Source(kind="websearch", name="y", config={"query": "q", "domains": "reddit.com/r/runnyc"})
     with pytest.raises(SourceError, match="can't read reddit.com"):
         web.fetch_websearch(only_reddit, None)
+
+
+def test_suggestions_accept_null_fields():
+    from app.suggestions import _source_config, _Suggestions
+
+    raw = {"suggestions": [{
+        "name": "Track miles", "description": "d", "why": "w", "urgent": None,
+        "sources": [{"kind": "rss", "name": "Feed", "url": "https://x.example/feed", "subreddit": None, "query": None},
+                    {"kind": "websearch", "name": "Search", "url": None, "query": "road mile races"}],
+    }]}
+    parsed = _Suggestions.model_validate(raw)
+    s = parsed.suggestions[0]
+    assert s.urgent is False
+    assert _source_config(s.sources[0]) == {"url": "https://x.example/feed"}
+    assert _source_config(s.sources[1]) == {"query": "road mile races"}

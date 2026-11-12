@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, time, timezone
 from typing import Any, Callable, Optional, Type
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 from sqlalchemy import func, select
 
 from app import config, settings_store
@@ -29,6 +29,21 @@ WEB_SEARCH_USD = 0.01  # per search
 # Models that accept server-side refusal fallbacks ("default" routing).
 FALLBACK_MODELS = {"claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+
+class Lenient(BaseModel):
+    """For answers parsed from free text (web search turns): a null field falls back to its
+    default, or "" for a required text field."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _null_to_default(cls, value, info):
+        field = cls.model_fields.get(info.field_name)
+        if value is not None or field is None:
+            return value
+        if not field.is_required():
+            return field.get_default(call_default_factory=True)
+        return "" if field.annotation is str else value
 
 
 class BudgetExceeded(Exception):
