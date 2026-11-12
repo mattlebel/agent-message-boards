@@ -256,6 +256,7 @@ def fetch_websearch(source, session) -> list[RawItem]:
             web_search=True,
             max_searches=int(cfg.get("max_searches", 3)),
             allowed_domains=allowed,
+            model=cfg.get("model") or None,
             fake=lambda: _FoundList(items=[]),
         )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 import logging
+import re
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from app import config, emailer, llm, settings_store, share, style
 from app.db import utcnow
 from app.discussion import thread_heat
-from app.models import Item, Newsletter, Thread, Topic
+from app.models import Item, Newsletter, Source, Thread, Topic
 from app.triage import AlertDecision
 
 log = logging.getLogger(__name__)
@@ -97,6 +98,28 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
     return threads[:12], leftovers
 
 
+def failing_sources_note(session: Session) -> str:
+    """One footer line naming sources whose last fetch failed, so breakage shows up in the inbox."""
+    rows = list(session.scalars(
+        select(Source).join(Topic)
+        .where(Source.active, Topic.active, Source.last_error != "")
+        .order_by(Topic.name, Source.name)
+    ))
+    if not rows:
+        return ""
+
+    def reason(err: str) -> str:
+        err = re.sub(r"^\w+(Error|Exception):\s*", "", err)  # drop the "SourceError: " prefix
+        return err[:70].rstrip() + ("…" if len(err) > 70 else "")
+
+    listed = "; ".join(
+        f"{html_lib.escape(src.name or src.kind)} ({html_lib.escape(reason(src.last_error))})" for src in rows[:6]
+    )
+    more = f" and {len(rows) - 6} more" if len(rows) > 6 else ""
+    return (f'<b>{len(rows)} source{"s" if len(rows) != 1 else ""} failing:</b> {listed}{more}. '
+            f'<a href="{config.BASE_URL}/topics" style="color:#777;">Check Topics</a>')
+
+
 def build_daily(session: Session, edition: str, critical: bool = True) -> Newsletter | None:
     last = session.scalar(
         select(Newsletter).where(Newsletter.kind == "daily", Newsletter.sent_at.is_not(None))
@@ -150,7 +173,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     ed = style.polish(ed, purpose="newsletter", role="newsletter", system=system, user=user,
                       critical=critical, long_form=True, max_tokens=12000)
     kicker = f"{name} · {now_et:%a %b %-d} · {'Morning' if edition == 'am' else 'Evening'}"
-    html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker, emailer.footer(), ed.preheader)
+    html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker,
+                        emailer.footer(failing_sources_note(session)), ed.preheader)
     key = f"daily:{now_et:%Y-%m-%d}:{edition}"
     existing = session.scalar(select(Newsletter).where(Newsletter.edition_key == key))
     if existing is not None:

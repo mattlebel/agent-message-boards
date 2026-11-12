@@ -164,6 +164,7 @@ def generate(
     allowed_domains: Optional[list[str]] = None,
     critical: bool = False,
     fake: Optional[Callable[[], Any]] = None,
+    model: Optional[str] = None,
 ) -> LlmResult:
     """Call Claude.
 
@@ -172,7 +173,8 @@ def generate(
     schema returns a validated pydantic object in .parsed.
     """
     with SessionLocal() as s:
-        model = settings_store.model_for(s, role)
+        # An explicit model (e.g. a source set to Haiku) wins over the role's model from Settings.
+        model = model if model in PRICES else settings_store.model_for(s, role)
 
     if config.LLM_FAKE:
         value = fake() if fake else "(fake model output)"

@@ -233,3 +233,34 @@ def test_google_news_cleanup_runs_once():
         assert s.scalar(select(Item).where(Item.title == "kept")) is not None
         assert run_migrations(s) == []  # already applied
         s.delete(topic)
+
+
+def test_failing_sources_footer_and_haiku_override(monkeypatch):
+    from app import llm
+    from app.db import init_db, session_scope
+    from app.models import Source, Topic
+    from app.newsletter import failing_sources_note
+    from app.sources import web
+
+    init_db()
+    with session_scope() as s:
+        topic = Topic(slug="footer-test", name="Footer")
+        s.add(topic)
+        s.flush()
+        s.add(Source(topic_id=topic.id, kind="page_watch", name="Wirecutter deals page",
+                     last_error="SourceError: HTTP 403 from https://www.nytimes.com/wirecutter/deals/"))
+        s.flush()
+        note = failing_sources_note(s)
+        assert "Wirecutter deals page (HTTP 403 from" in note and "SourceError" not in note
+        s.delete(topic)
+
+    seen = {}
+
+    def fake_generate(**kw):
+        seen["model"] = kw.get("model")
+        return llm.LlmResult(text="{}", parsed=web._FoundList(items=[]))
+
+    monkeypatch.setattr(llm, "generate", fake_generate)
+    src = Source(kind="websearch", name="x", config={"query": "q", "model": "claude-haiku-5-5"})
+    web.fetch_websearch(src, None)
+    assert seen["model"] == "claude-haiku-5-5"

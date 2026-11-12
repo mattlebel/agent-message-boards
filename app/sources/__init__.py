@@ -48,7 +48,8 @@ KINDS = {
         "label": "Claude web search (~$0.02-0.05 per run)",
         "fields": {"query": "What to look for", "instructions": "Extra guidance (optional)",
                    "domains": "Only search these sites, comma separated (optional, e.g. reddit.com)",
-                   "days": "How recent, in days (default 3)", "max_results": "Max items (default 6)"},
+                   "days": "How recent, in days (default 3)", "max_results": "Max items (default 6)",
+                   "model": "Model (optional, e.g. claude-haiku-5-5 to make it cheaper)"},
     },
 }
 

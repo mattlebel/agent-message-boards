@@ -78,8 +78,10 @@ TOPICS = [
         ),
         "sources": [
             {"kind": "websearch", "name": "NYRR news and race registration", "interval_minutes": 720, "config": {
+                "model": "claude-haiku-5-5",
                 "query": "New York Road Runners (NYRR) news: race announcements, registration openings, NYC Marathon updates", "days": 3}},
             {"kind": "websearch", "name": "NYC running community", "interval_minutes": 1440, "config": {
+                "model": "claude-haiku-5-5",
                 "query": "NYC running community news: run clubs, mile races, track meets, road races in New York City", "days": 4}},
         ],
     },
@@ -95,9 +97,11 @@ TOPICS = [
         ),
         "sources": [
             {"kind": "websearch", "name": "Back Bay group runs", "interval_minutes": 1440, "config": {
+                "model": "claude-haiku-5-5",
                 "query": "Back Bay Boston group runs and run clubs this week: Tracksmith Newbury Street, Dick's Sporting Goods run club, Boylston Street running stores",
                 "days": 7}},
             {"kind": "websearch", "name": "BAA and Boston races", "interval_minutes": 1440, "config": {
+                "model": "claude-haiku-5-5",
                 "query": "Boston Athletic Association (BAA) news, Boston Marathon registration and qualifying, mile races in Boston", "days": 4}},
         ],
     },
@@ -192,8 +196,20 @@ def _drop_google_news(session: Session) -> str:
     return f"removed {len(rows)} Google News sources"
 
 
+def _haiku_for_running_searches(session: Session) -> str:
+    """The twice-daily running web searches run on Haiku (Opus stays on the newsletter)."""
+    rows = list(session.scalars(
+        select(Source).join(Topic)
+        .where(Source.kind == "websearch", Topic.slug.in_(["nyc-running", "boston-running"]))
+    ))
+    for src in rows:
+        src.config = {**(src.config or {}), "model": "claude-haiku-5-5"}
+    return f"{len(rows)} running searches now use Haiku"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
+    ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
 ]
 
 
