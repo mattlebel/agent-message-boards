@@ -461,9 +461,12 @@ def delete_source(source_id: int, user=Depends(require_user), session: Session =
 
 
 @app.post("/sources/{source_id}/fetch")
-def fetch_source(request: Request, source_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+def fetch_source(request: Request, background: BackgroundTasks, source_id: int, user=Depends(require_user),
+                 session: Session = Depends(get_session)):
     src = session.get(Source, source_id)
     new = ingest.fetch_one(session, src)
+    if new and src.topic.urgent:
+        background.add_task(jobs.alerts_after_manual_fetch)
     if src.last_error:
         flash(request, f"Fetch failed: {src.last_error}")
     else:

@@ -34,9 +34,9 @@ DEFAULTS: dict[str, Any] = {
         "alerts": "claude-sonnet-5-5",  # deciding whether something is an urgent drop
     },
     "daily_budget_usd": 3.0,
-    "threads_per_cycle": 8,
-    "min_replies": 2,
-    "max_replies": 4,
+    "threads_per_cycle": 5,
+    "min_replies": 0,
+    "max_replies": 2,
     # Times are US Eastern.
     "schedule": {
         "cycle_am": "05:00",

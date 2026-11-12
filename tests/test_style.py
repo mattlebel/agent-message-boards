@@ -127,3 +127,47 @@ def test_bootstrap_skips_a_refused_persona(monkeypatch):
         assert len(list(s.scalars(personas.select(Agent).where(Agent.active)))) == 3
         for a in s.scalars(personas.select(Agent)):
             s.delete(a)
+
+
+def test_reply_can_pass(monkeypatch):
+    from app import discussion, llm
+    from app.db import init_db, session_scope
+    from app.models import Agent, Thread
+
+    init_db()
+    monkeypatch.setattr(llm, "generate",
+                        lambda **kw: llm.LlmResult(text="", parsed=discussion._Reply(skip=True)))
+    with session_scope() as s:
+        agent = Agent(handle="passer", display_name="P")
+        thread = Thread(title="t")
+        s.add_all([agent, thread])
+        s.flush()
+        assert discussion.add_reply(s, thread, agent=agent) is None
+        assert thread.posts == []
+        s.delete(thread)
+        s.delete(agent)
+
+
+def test_manually_fetched_urgent_items_get_alert_checked():
+    from sqlalchemy import select
+
+    from app import jobs, triage
+    from app.db import init_db, session_scope
+    from app.models import Item, Topic
+    from app.sources.base import dedupe_key
+
+    init_db()
+    with session_scope() as s:
+        topic = Topic(slug="urgent-test", name="Urgent", urgent=True)
+        s.add(topic)
+        s.flush()
+        s.add(Item(topic_id=topic.id, dedupe_key=dedupe_key("urgent-test-1"), title="New machine at the Met",
+                   status="discussed", extra={}))
+        s.flush()
+        mine = lambda: [i for i in triage.pending_urgent(s) if i.topic_id == topic.id]  # noqa: E731
+        assert len(mine()) == 1
+        jobs.alerts_for_pending(s)  # fake model says "not an alert"
+        assert mine() == []
+        item = s.scalar(select(Item).where(Item.topic_id == topic.id))
+        assert item.extra.get("urgent_checked") is True
+        s.delete(topic)

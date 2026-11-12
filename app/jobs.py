@@ -23,23 +23,35 @@ log = logging.getLogger("jobs")
 # --- the actual jobs ------------------------------------------------------------------
 
 
-def _alerts_for(session: Session, items) -> int:
+def alerts_for_pending(session: Session) -> int:
+    """Alert-check every item in an urgent topic that hasn't been checked yet; email the real drops."""
+    from app.models import Thread
+
     sent = 0
-    for item, decision in triage.check_urgent(session, items):
-        thread = None
-        try:
-            thread = discussion.alert_thread(session, item, decision)
-        except Exception:
-            log.exception("alert thread failed")
-            session.rollback()
+    for item, decision in triage.check_urgent(session, triage.pending_urgent(session)):
+        thread = session.scalar(select(Thread).where(Thread.item_id == item.id).limit(1))
+        if thread is None:
+            try:
+                thread = discussion.alert_thread(session, item, decision)
+            except Exception:
+                log.exception("alert thread failed")
+                session.rollback()
         newsletter.send_alert(session, item, decision, thread)
         sent += 1
     return sent
 
 
+def alerts_after_manual_fetch() -> None:
+    """Run from the web app after "Fetch now"; the next scheduled check covers it if a job is running."""
+    with job_lock("tick") as got:
+        if got:
+            with session_scope() as s:
+                alerts_for_pending(s)
+
+
 def hot(session: Session) -> str:
     new = ingest.run_ingest(session, hot_only=True)
-    alerts = _alerts_for(session, new)
+    alerts = alerts_for_pending(session)
     return f"{len(new)} new items, {alerts} alerts"
 
 
@@ -48,7 +60,7 @@ def cycle(session: Session) -> str:
         personas.bootstrap(session)
     inbound.process_pending(session)
     new = ingest.run_ingest(session)
-    alerts = _alerts_for(session, new)
+    alerts = alerts_for_pending(session)
     scored = triage.triage(session)
     n = int(settings_store.get(session, "threads_per_cycle"))
     picked = triage.pick_for_discussion(session, n)
@@ -147,9 +159,9 @@ def run_hot_quietly() -> None:
     try:
         with session_scope() as s:
             new = ingest.run_ingest(s, hot_only=True)
-            alerts = _alerts_for(s, new)
+            alerts = alerts_for_pending(s)
         detail, status = f"{len(new)} new items, {alerts} alerts", "ok"
-        if not new:
+        if not new and not alerts:
             return
     except Exception as e:
         log.exception("hot check failed")

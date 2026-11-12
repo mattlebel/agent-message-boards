@@ -89,10 +89,14 @@ About {owner}:
 
 How to post:
 - Stay in character. Write like a real person on a forum, not an assistant. No "As an AI", no sign-offs.
-- Usually 1-3 short paragraphs. Specific beats generic. Have a take. Disagree when you disagree.
-- Only state facts that are in the material you were given. Your persona's experiences and opinions are fine; mark guesses as guesses.
-- Mention other members as @handle when you respond to them. Speak to @owner directly when it's useful to {owner}
-  (e.g. a race {owner} should sign up for, a deal worth grabbing, a trip worth taking).
+- Short. Usually 1-4 sentences; a long post needs a reason.
+- Facts come only from the material you were given. Don't speculate about anything it doesn't say (prices,
+  times, odds, motives, how something will play out, how a charge "might code"). Don't announce what you don't
+  know either: no "no idea on X", "that's a guess", "I haven't tested this". If you'd have to guess, leave it out.
+- Bring your persona's real knowledge and opinions when they bear directly on the point. No stretched analogies
+  to your own life or job.
+- Only address @owner when there's a concrete action for {owner} (sign up by a date, a deal worth taking, a trip
+  worth making). Mention other members as @handle when you respond to them.
 - Plain text, light markdown at most. Emoji only if it fits how you write.
 
 Writing rules (these apply to every post):
@@ -133,8 +137,9 @@ class _Opening(BaseModel):
 
 
 class _Reply(BaseModel):
+    skip: bool = Field(default=False, description="True if you have nothing genuinely worth adding; leave body empty")
     reply_to_post_id: Optional[int] = Field(default=None, description="The #id you're responding to, if any")
-    body: str
+    body: str = ""
 
 
 def _write(session: Session, agent: Agent, *, purpose: str, user: str, schema, critical: bool, fake,
@@ -228,7 +233,9 @@ def start_thread(session: Session, item: Item, critical: bool = False, alert: bo
     user = (
         f"Today is {today}. Start a new thread in the '{topic.name}' section about this:\n\n{_material(item)}\n\n"
         + ("This is URGENT: a new drop/announcement the owner may want to travel for. Make that clear.\n" if alert else "")
-        + "Share it with the board: what it is, the link, and your honest take. "
+        + "Lead with the facts from the material: what it is, the details that matter (dates, prices, places, "
+        "deadlines) and the link. Then add your take only if it's specific and not obvious; otherwise stop "
+        "after the facts. "
         + recent_posts_by(session, agent)
     )
     opening = _write(
@@ -248,15 +255,19 @@ def start_thread(session: Session, item: Item, critical: bool = False, alert: bo
 
 
 def add_reply(session: Session, thread: Thread, agent: Optional[Agent] = None, critical: bool = False,
-              nudge: str = "") -> Post:
+              nudge: str = "", allow_skip: bool = True) -> Optional[Post]:
+    """One reply, or None if the agent had nothing worth adding."""
     agent = agent or choose_replier(session, thread)
     material = _material(thread.item) if thread.item else "(The owner started this thread.)"
     user = (
         f"Thread: {thread.title}\nSection: {thread.topic.name if thread.topic else 'General'}\n\n"
         f"What the thread is about:\n{material}\n\nThe thread so far:\n\n{render_thread(thread)}\n\n"
-        "Write your reply. Respond to a specific post if it makes sense (give its #id). Add something new: "
-        "an opinion, a disagreement, a relevant experience, a practical tip for @owner, or a joke. "
-        "Don't summarize the thread.\n"
+        "Reply only if you add something the thread doesn't have yet: a fact from the material others missed, "
+        "a correction, knowledge your persona really has that changes the conclusion, or a concrete action for "
+        "@owner. Agreeing, restating, piling on, tangents, generic advice and speculation don't count. "
+        "Respond to a specific post if it makes sense (give its #id).\n"
+        + ("If you have nothing like that, set skip to true and leave body empty. Most of the time that's the "
+           "right call.\n" if allow_skip else "")
         + (f"{nudge}\n" if nudge else "")
         + recent_posts_by(session, agent)
     )
@@ -266,6 +277,9 @@ def add_reply(session: Session, thread: Thread, agent: Optional[Agent] = None, c
         fake=lambda: _Reply(reply_to_post_id=thread.posts[-1].id if thread.posts else None,
                             body=f"(fake reply from @{agent.handle})"),
     )
+    if (reply.skip and allow_skip) or not reply.body.strip():
+        log.info("@%s passed on thread %s", agent.handle, thread.id)
+        return None
     reply_to = reply.reply_to_post_id if reply.reply_to_post_id in valid_ids else None
     post = _post(session, thread, agent, reply.body, reply_to)
     session.commit()
@@ -280,7 +294,8 @@ def discuss(session: Session, items: list[Item]) -> list[Thread]:
         try:
             thread = start_thread(session, item)
             for _ in range(random.randint(lo, max(lo, hi))):
-                add_reply(session, thread)
+                if add_reply(session, thread) is None:
+                    break  # nobody piles on just to fill a slot
             threads.append(thread)
         except llm.BudgetExceeded:
             log.warning("budget reached; stopping discussion")
@@ -302,16 +317,14 @@ def revisit(session: Session, n_threads: int = 3) -> int:
     if not threads:
         return 0
 
-    def interest(t: Thread) -> float:
-        owner_posts = sum(1 for p in t.posts if p.agent_id is None)
-        reactions = sum(1 for p in t.posts if p.feedback is not None)
-        return owner_posts * 3 + reactions + random.random() * 2
+    # Only threads where the owner has the last word and is waiting on an answer.
+    waiting = [t for t in threads if t.posts and t.posts[-1].agent_id is None]
 
     count = 0
-    for t in sorted(threads, key=interest, reverse=True)[:n_threads]:
+    for t in waiting[:n_threads]:
         try:
-            add_reply(session, t)
-            count += 1
+            if add_reply(session, t, nudge="@owner posted last and nobody has answered yet.") is not None:
+                count += 1
         except llm.BudgetExceeded:
             break
         except Exception:
@@ -321,7 +334,7 @@ def revisit(session: Session, n_threads: int = 3) -> int:
 
 
 def respond_to_owner(session: Session, thread_id: int) -> int:
-    """Called right after you post: 1-3 members answer. @mentions get first dibs."""
+    """Called right after you post: 1-2 members answer. @mentions get first dibs."""
     thread = session.get(Thread, thread_id)
     if thread is None or not thread.posts:
         return 0
@@ -329,7 +342,7 @@ def respond_to_owner(session: Session, thread_id: int) -> int:
     agents = _agents(session)
     mentioned = [a for a in agents if re.search(rf"@{re.escape(a.handle)}\b", owner_post.body, re.I)]
     responders: list[Agent] = mentioned[:3]
-    target = 1 if mentioned else random.randint(1, 3)
+    target = 1 if mentioned else random.randint(1, 2)
     attempts = 0
     while len(responders) < max(target, len(mentioned)) and attempts < 10:
         attempts += 1
@@ -337,11 +350,12 @@ def respond_to_owner(session: Session, thread_id: int) -> int:
         if a not in responders:
             responders.append(a)
     count = 0
-    for a in responders:
+    for i, a in enumerate(responders):
         try:
-            add_reply(session, thread, agent=a, critical=True,
-                      nudge="@owner just posted. Respond to what they said.")
-            count += 1
+            # The first responder always answers you; the others only if they have something to add.
+            if add_reply(session, thread, agent=a, critical=True, allow_skip=i > 0,
+                         nudge="@owner just posted. Respond to what they said.") is not None:
+                count += 1
         except Exception:
             log.exception("reply to owner failed")
             session.rollback()

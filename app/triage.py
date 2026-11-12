@@ -120,7 +120,7 @@ def pick_for_discussion(session: Session, n: int) -> list[Item]:
         session.scalars(
             select(Item)
             .join(Topic)
-            .where(Item.status == "scored", Item.score >= 5, Item.fetched_at >= since, Topic.active)
+            .where(Item.status == "scored", Item.score >= 7, Item.fetched_at >= since, Topic.active)
         )
     )
     def rank(i: Item) -> float:
@@ -159,9 +159,25 @@ class _AlertDecisions(BaseModel):
     decisions: list[AlertDecision]
 
 
+def pending_urgent(session: Session) -> list[Item]:
+    """Recent items in alert topics that haven't had the alert check yet, however they arrived
+    (scheduled fetch, "Fetch now", a forwarded email)."""
+    since = utcnow() - timedelta(days=3)
+    rows = session.scalars(
+        select(Item).join(Topic)
+        .where(Topic.urgent, Topic.active, Item.fetched_at >= since,
+               Item.status.in_(["new", "scored", "picked", "discussed"]))
+    )
+    return [i for i in rows if not (i.extra or {}).get("urgent_checked")]
+
+
 def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertDecision]]:
     """For items in urgent topics: is this a drop worth an immediate email?"""
-    urgent_items = [i for i in items if i.topic and i.topic.urgent and i.status in ("new", "scored")]
+    urgent_items = [
+        i for i in items
+        if i.topic and i.topic.urgent and i.status in ("new", "scored", "picked", "discussed")
+        and not (i.extra or {}).get("urgent_checked")
+    ]
     if not urgent_items:
         return []
     profile = settings_store.get(session, "profile")
@@ -197,6 +213,7 @@ def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertD
         )
         by_id = {d.id: d for d in res.parsed.decisions}
         for it in group:
+            it.extra = {**(it.extra or {}), "urgent_checked": True}
             d = by_id.get(it.id)
             if d and d.is_alert:
                 it.status = "alerted"
