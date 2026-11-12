@@ -33,8 +33,6 @@ TOPICS = [
             {"kind": "shopify", "name": "Inciardi shop products", "config": {"url": "https://inciardiprints.com"}, "interval_minutes": 60},
             {"kind": "page_watch", "name": "miniprint.io home", "config": {"url": "https://miniprint.io/"}, "interval_minutes": 30},
             {"kind": "sitemap", "name": "miniprint.io new pages", "config": {"url": "https://miniprint.io/sitemap.xml"}, "interval_minutes": 60},
-            {"kind": "rss", "name": "Google News: Inciardi", "interval_minutes": 60, "config": {
-                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=Inciardi+(print+OR+prints+OR+vending+OR+machine)+when:14d"}},
             {"kind": "websearch", "name": "Venue announcements and pop-ups", "interval_minutes": 360, "config": {
                 "query": "Inciardi mini print vending machine: new host locations, limited-time machines, pop-ups, collab or venue-exclusive print series",
                 "instructions": "Look for museums, bookstores, cafes, shops and events announcing a machine or exclusive prints, "
@@ -83,8 +81,6 @@ TOPICS = [
                 "query": "New York Road Runners (NYRR) news: race announcements, registration openings, NYC Marathon updates", "days": 3}},
             {"kind": "websearch", "name": "NYC running community", "interval_minutes": 1440, "config": {
                 "query": "NYC running community news: run clubs, mile races, track meets, road races in New York City", "days": 4}},
-            {"kind": "rss", "name": "Google News: NYRR", "config": {
-                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=%22New+York+Road+Runners%22+OR+NYRR+when:3d"}},
         ],
     },
     {
@@ -103,8 +99,6 @@ TOPICS = [
                 "days": 7}},
             {"kind": "websearch", "name": "BAA and Boston races", "interval_minutes": 1440, "config": {
                 "query": "Boston Athletic Association (BAA) news, Boston Marathon registration and qualifying, mile races in Boston", "days": 4}},
-            {"kind": "rss", "name": "Google News: BAA and Boston running", "config": {
-                "url": "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=%22Boston+Athletic+Association%22+OR+%22Tracksmith%22+OR+%22Boston+Marathon%22+when:3d"}},
         ],
     },
     {
@@ -183,3 +177,36 @@ def seed(session: Session) -> bool:
             ))
     session.commit()
     return True
+
+
+# --- one-time changes to an existing database --------------------------------------------
+# Each runs once; its name is recorded in the "applied_migrations" setting.
+
+
+def _drop_google_news(session: Session) -> str:
+    """Google News answers Render's servers with HTTP 503, so those feeds never work."""
+    rows = [src for src in session.scalars(select(Source).where(Source.kind == "rss"))
+            if "news.google.com" in str((src.config or {}).get("url", ""))]
+    for src in rows:
+        session.delete(src)  # items it already fetched stay (their source link is cleared)
+    return f"removed {len(rows)} Google News sources"
+
+
+MIGRATIONS = [
+    ("2026-11-12-drop-google-news", _drop_google_news),
+]
+
+
+def run_migrations(session: Session) -> list[str]:
+    from app import settings_store
+
+    applied = list(settings_store.get(session, "applied_migrations") or [])
+    done = []
+    for name, fn in MIGRATIONS:
+        if name in applied:
+            continue
+        done.append(f"{name}: {fn(session)}")
+        applied.append(name)
+        settings_store.set(session, "applied_migrations", applied)
+        session.commit()
+    return done

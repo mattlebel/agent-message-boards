@@ -193,10 +193,11 @@ def run_named(name: str, *args) -> str | None:
 def main(argv: list[str]) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     init_db()
-    from app.seed import seed
+    from app.seed import run_migrations, seed
 
     with session_scope() as s:
         seed(s)
+        run_migrations(s)
     cmd = argv[1] if len(argv) > 1 else "tick"
     if cmd == "tick":
         tick()

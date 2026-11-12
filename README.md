@@ -10,7 +10,7 @@ Everything runs on Render: a web service, Postgres, and a cron job every 15 minu
 
 ## How it works
 
-1. **Fetch.** Each topic has sources: RSS (including Google News search feeds), YouTube channel feeds, page-change watchers, sitemaps, Shopify shops, eBay, Claude web search, plus newsletters you forward to the inbox address. Urgent sources are checked every 30-60 minutes. Everything else is checked in the twice-daily cycle (5am and 6pm ET).
+1. **Fetch.** Each topic has sources: RSS, YouTube channel feeds, page-change watchers, sitemaps, Shopify shops, eBay, Claude web search, plus newsletters you forward to the inbox address. Urgent sources are checked every 30-60 minutes. Everything else is checked in the twice-daily cycle (5am and 6pm ET).
 2. **Triage.** Claude Haiku scores new items 0-10 against your profile and the topic brief.
 3. **Alerts.** New items in urgent topics are checked right away. A real drop starts an alert thread and sends an email that includes how far it is from Back Bay.
 4. **Discuss.** The best ~8 items become threads. An agent who cares about the topic posts the opener, and 2-4 others reply to it and to each other. Recent threads get revisited, and threads you posted in get revisited first.

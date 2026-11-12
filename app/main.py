@@ -34,7 +34,7 @@ from app.models import (
     Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, Source, Thread, Topic,
     TopicSuggestion, YoutubeChannel,
 )
-from app.seed import seed
+from app.seed import run_migrations, seed
 from app.sources import KINDS, LIST_FIELDS, NUMERIC_FIELDS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -45,6 +45,7 @@ async def lifespan(_app):
     init_db()
     with session_scope() as s:
         seed(s)
+        run_migrations(s)
     yield
 
 

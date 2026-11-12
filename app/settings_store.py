@@ -49,6 +49,7 @@ DEFAULTS: dict[str, Any] = {
     "recipients": [],  # empty = EMAIL_TO env var
     "style_guide": "",  # empty = built-in anti-"LLM speak" rules in app/style.py
     "paused": False,
+    "applied_migrations": [],
 }
 
 

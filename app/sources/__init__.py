@@ -19,7 +19,7 @@ FETCHERS = {
 
 KINDS = {
     "rss": {
-        "label": "RSS / Atom feed (tip: Google News search feeds work here)",
+        "label": "RSS / Atom feed",
         "fields": {"url": "Feed URL", "include": "Only keep items matching this regex (optional)",
                    "exclude": "Drop items matching this regex (optional)"},
     },

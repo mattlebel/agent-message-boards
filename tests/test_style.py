@@ -203,3 +203,33 @@ def test_polish_rewrites_a_newsletter_subject(monkeypatch):
     assert style.polish(clean, purpose="newsletter", role="newsletter", system="s", user="u",
                         long_form=True) is clean
     assert calls == []
+
+
+def test_google_news_cleanup_runs_once():
+    from sqlalchemy import select
+
+    from app import settings_store
+    from app.db import init_db, session_scope
+    from app.models import Item, Source, Topic
+    from app.seed import run_migrations
+    from app.sources.base import dedupe_key
+
+    init_db()
+    with session_scope() as s:
+        settings_store.set(s, "applied_migrations", [])
+        topic = Topic(slug="gn-test", name="GN")
+        s.add(topic)
+        s.flush()
+        gn = Source(topic_id=topic.id, kind="rss", name="Google News: x",
+                    config={"url": "https://news.google.com/rss/search?q=x"})
+        keep = Source(topic_id=topic.id, kind="rss", name="Blog", config={"url": "https://blog.example/feed"})
+        s.add_all([gn, keep])
+        s.flush()
+        s.add(Item(topic_id=topic.id, source_id=gn.id, dedupe_key=dedupe_key("gn-item"), title="kept"))
+        s.commit()
+        assert any("drop-google-news" in d for d in run_migrations(s))
+        names = [x.name for x in s.scalars(select(Source).where(Source.topic_id == topic.id))]
+        assert names == ["Blog"]
+        assert s.scalar(select(Item).where(Item.title == "kept")) is not None
+        assert run_migrations(s) == []  # already applied
+        s.delete(topic)
