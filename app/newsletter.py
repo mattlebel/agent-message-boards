@@ -45,7 +45,8 @@ Structure (markdown):
 3. "## Things happened" - a bulleted list of 6-12 short items, each one sentence with a link, often with a
    dry comment after it.
 4. If the reader saved links, a "## From your reading list" section (see the material).
-5. If there are dated actions, end with "## Dates" - a short list of what to do and when.
+5. If there are new subscription videos, a "## New on YouTube" list (see the material).
+6. If there are dated actions, end with "## Dates" - a short list of what to do and when.
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
 Images: when an item in the material has an "Image:" URL, you may show it once, with markdown
@@ -142,6 +143,22 @@ def failing_sources_note(session: Session) -> str:
             f'<a href="{config.BASE_URL}/topics" style="color:#777;">Check Topics</a>')
 
 
+def new_videos(session: Session) -> list[Item]:
+    """Subscription videos not yet in a newsletter (last 3 days), grouped by channel."""
+    since = utcnow() - timedelta(days=3)
+    rows = list(session.scalars(select(Item).where(Item.status == "video", Item.fetched_at >= since)))
+    rows.sort(key=lambda i: ((i.extra or {}).get("channel") or "", i.published_at or i.fetched_at))
+    return rows[:30]
+
+
+def _video_material(videos: list[Item]) -> str:
+    return "\n".join(
+        f"- {(v.extra or {}).get('channel', '')}: {v.title} ({v.url}) | {(v.body or '')[:300].replace(chr(10), ' ')}"
+        + (f" | Image: {images.for_item(v)}" if images.for_item(v) else "")
+        for v in videos
+    )
+
+
 def build_daily(session: Session, edition: str, critical: bool = True) -> Newsletter | None:
     last = session.scalar(
         select(Newsletter).where(Newsletter.kind == "daily", Newsletter.sent_at.is_not(None))
@@ -150,7 +167,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     since = last.created_at if last else utcnow() - timedelta(hours=14)
     threads, leftovers = collect(session, since)
     saved = reading.for_newsletter(session)
-    if not threads and not leftovers and not saved:
+    videos = new_videos(session)
+    if not threads and not leftovers and not saved and not videos:
         log.info("nothing new for the newsletter")
         return None
     name = settings_store.get(session, "newsletter_name")
@@ -165,7 +183,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     previous = "\n\n".join(f"Subject: {n.subject}\n{n.markdown[:1500]}" for n in recent)
     images.fill_missing(session, [t.item for t in threads[:6] if t.item])
     session.commit()
-    allowed_images = {images.for_item(t.item) for t in threads if t.item} - {""}
+    allowed_images = ({images.for_item(t.item) for t in threads if t.item}
+                      | {images.for_item(v) for v in videos}) - {""}
     material = "\n\n---\n\n".join(_thread_material(t) for t in threads)
     extras = "\n".join(
         f"- [{i.topic.name}] {i.title} ({i.url}) {i.triage_note}" for i in leftovers
@@ -182,6 +201,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
             "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url,
                                                                             allowed_images) + "\n\n"
             if saved else ""
+        )
+        + (
+            "NEW VIDEOS FROM THE READER'S YOUTUBE SUBSCRIPTIONS. List every one under '## New on YouTube', "
+            "near the end: one line each with the channel, the linked title, and a few words on what it is "
+            "(from the description). Group a channel's videos together. No commentary beyond that unless a "
+            "video ties into something else in this edition.\n" + _video_material(videos) + "\n\n"
+            if videos else ""
         )
         + (f"YOUR LAST EDITIONS (for running jokes; don't repeat the same items):\n{previous}\n" if previous else "")
     )
@@ -220,6 +246,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     session.flush()
     for r in saved:
         r.newsletter_id = nl.id
+    for v in videos:
+        v.status = "sent"
     session.commit()
     return nl
 

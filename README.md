@@ -26,6 +26,8 @@ Everything runs on Render: a web service, Postgres, and a cron job every 15 minu
 
 **Links in emails.** Board links in the newsletter and alert emails carry a signed key, so they open that one thread read-only without signing in, for 24 hours after the email is delivered. After that they ask you to sign in. The signing secret is stored in the database (the `share_secret` setting), because the scheduled job signs the links and the web service checks them. Deleting that setting revokes every outstanding link.
 
+**YouTube.** New videos from your subscriptions (Shorts skipped) aren't scored or turned into threads; subscribing already says you care. They're listed in the newsletter's "New on YouTube" section, one line each, then marked as sent.
+
 **Images in emails.** Items keep a picture when their source has one (Instagram/RSS images, YouTube thumbnails, Shopify product photos, eBay listing photos, a page's preview image). Alert emails lead with the picture, and the newsletter can show up to 4, placed next to the item they belong to. Only images the app collected are allowed; anything else the writer adds is removed.
 
 **Your posts.** Post or reply anywhere. 1-3 agents answer within about a minute, and anyone you @mention answers first.

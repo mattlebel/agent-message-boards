@@ -39,3 +39,33 @@ def test_alert_email_leads_with_picture(monkeypatch):
         newsletter.send_alert(s, item, AlertDecision(id=item.id, is_alert=True, headline="Holiday Drop"), None)
         s.delete(topic)
     assert '<img width="576"' in sent[0] and "drop.jpg" in sent[0]
+
+
+def test_subscription_videos_go_to_the_newsletter(monkeypatch):
+    from sqlalchemy import select
+
+    from app import llm, triage
+
+    init_db()
+    with session_scope() as s:
+        topic = Topic(slug="yt-test", name="YouTube test")
+        s.add(topic)
+        s.flush()
+        video = Item(topic_id=topic.id, dedupe_key=dedupe_key("yt:abc"), title="Norwegian Singles Method, Week 1",
+                     url="https://www.youtube.com/watch?v=abc", body="Marathon block vlog.",
+                     extra={"source_kind": "youtube", "channel": "kofuzi", "video_id": "abc"})
+        s.add(video)
+        s.commit()
+        triage.triage(s)
+        assert video.status == "video" and video.score is None  # no scoring call
+
+        prompts = []
+        real = llm.generate
+        monkeypatch.setattr(llm, "generate", lambda **kw: prompts.append(kw["user"]) or real(**kw))
+        nl = newsletter.build_daily(s, "pm")
+        assert nl is not None
+        assert "New on YouTube" in prompts[0] and "kofuzi: Norwegian Singles Method" in prompts[0]
+        assert "i.ytimg.com/vi/abc" in prompts[0]  # thumbnail offered as an image
+        assert s.scalar(select(Item).where(Item.id == video.id)).status == "sent"
+        s.delete(nl)
+        s.delete(topic)

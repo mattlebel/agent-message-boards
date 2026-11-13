@@ -60,6 +60,10 @@ def triage(session: Session) -> int:
     )
     for it in [i for i in items if (i.extra or {}).get("kind") == "ebay_digest"]:
         it.score, it.triage_note, it.status = 9.0, "Twice-daily eBay digest", "scored"
+    # Videos from your subscriptions aren't judged against your profile (subscribing already says you
+    # care); they're listed in the newsletter's "New on YouTube" section instead of getting threads.
+    for it in [i for i in items if (i.extra or {}).get("source_kind") == "youtube"]:
+        it.status = "video"
     items = [i for i in items if i.status == "new"]
     if not items:
         return 0

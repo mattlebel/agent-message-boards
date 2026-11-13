@@ -226,10 +226,27 @@ def _ebay_digests(session: Session) -> str:
     return f"{len(srcs)} eBay sources switched to digests, {skipped} single-listing items skipped"
 
 
+def _videos_to_newsletter(session: Session) -> str:
+    """Subscription videos stop going through scoring; recent ones queue for the YouTube section."""
+    from datetime import timedelta
+
+    from app.db import utcnow
+    from app.models import Item
+
+    since = utcnow() - timedelta(days=3)
+    moved = 0
+    for item in session.scalars(select(Item).where(Item.status.in_(["new", "scored"]), Item.fetched_at >= since)):
+        if (item.extra or {}).get("source_kind") == "youtube" and "/shorts/" not in (item.url or ""):
+            item.status = "video"
+            moved += 1
+    return f"{moved} recent videos queued for the newsletter"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
     ("2026-11-12-ebay-digests", _ebay_digests),
+    ("2026-11-13-videos-to-newsletter", _videos_to_newsletter),
 ]
 
 

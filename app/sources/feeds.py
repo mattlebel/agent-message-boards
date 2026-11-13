@@ -202,6 +202,8 @@ def _fetch_channel(channel_id: str, max_age: timedelta) -> list[RawItem]:
         if published and published < cutoff:
             continue
         vid = e.get("yt_videoid") or e.get("id", "")
+        if "/shorts/" in e.get("link", "") or "#shorts" in (e.get("title", "") or "").lower():
+            continue  # Shorts aren't worth a recap line
         desc = ""
         if e.get("media_description"):
             desc = e["media_description"]
