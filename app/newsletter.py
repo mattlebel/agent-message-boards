@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, images, llm, reading, settings_store, share, style
+from app.wallet import profile_text as wallet_profile
+from app import config, emailer, images, llm, reading, settings_store, share, style, travel
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Source, Thread, Topic
@@ -45,8 +46,9 @@ Structure (markdown):
 3. "## Things happened" - a bulleted list of 6-12 short items, each one sentence with a link, often with a
    dry comment after it.
 4. If the reader saved links, a "## From your reading list" section (see the material).
-5. If there are new subscription videos, a "## New on YouTube" list (see the material).
-6. If there are dated actions, end with "## Dates" - a short list of what to do and when.
+5. If there are new reviews from the reader's places, a "## Reviews from your places" list (see the material).
+6. If there are new subscription videos, a "## New on YouTube" list (see the material).
+7. If there are dated actions, end with "## Dates" - a short list of what to do and when.
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
 Images: when an item in the material has an "Image:" URL, you may show it once, with markdown
@@ -175,12 +177,15 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     threads, leftovers = collect(session, since)
     saved = reading.for_newsletter(session)
     videos = new_videos(session)
-    if not threads and not leftovers and not saved and not videos:
+    reviews = travel.for_newsletter(session)
+    review_ids = {r.id for r in reviews}
+    leftovers = [i for i in leftovers if i.id not in review_ids]
+    if not threads and not leftovers and not saved and not videos and not reviews:
         log.info("nothing new for the newsletter")
         return None
     name = settings_store.get(session, "newsletter_name")
     owner = settings_store.get(session, "owner_name")
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     now_et = datetime.now(config.TZ)
     recent = list(
         session.scalars(
@@ -191,7 +196,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     images.fill_missing(session, [t.item for t in threads[:6] if t.item])
     session.commit()
     allowed_images = ({images.for_item(t.item) for t in threads if t.item}
-                      | {images.for_item(v) for v in videos}) - {""}
+                      | {images.for_item(v) for v in videos}
+                      | {images.for_item(r) for r in reviews}) - {""}
     material = "\n\n---\n\n".join(_thread_material(t) for t in threads)
     extras = "\n".join(
         f"- [{i.topic.name}] {i.title} ({i.url}) {i.triage_note}" for i in leftovers
@@ -208,6 +214,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
             "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url,
                                                                             allowed_images) + "\n\n"
             if saved else ""
+        )
+        + (
+            "NEW ONE MILE AT A TIME REVIEWS FROM PLACES THE READER IS WATCHING. Give them a section, "
+            "'## Reviews from your places': one line each with the type (flight, lounge, hotel), the linked "
+            "title and the one thing worth knowing from it.\n"
+            + travel.newsletter_material(reviews, travel.regions(session)) + "\n\n"
+            if reviews else ""
         )
         + (
             "NEW VIDEOS FROM THE READER'S YOUTUBE SUBSCRIPTIONS. List every one under '## New on YouTube', "
@@ -255,6 +268,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         r.newsletter_id = nl.id
     for v in videos:
         v.extra = {**(v.extra or {}), "newsletter_id": nl.id}
+    for r in reviews:
+        r.extra = {**(r.extra or {}), "newsletter_reviews": nl.id}
     session.commit()
     return nl
 

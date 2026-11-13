@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Travel{% endblock %}
+{% block content %}
+<h2>Trip reports</h2>
+<p class="muted">Flight, lounge and hotel reviews from One Mile at a Time for the places you list. New ones also go in the newsletter.</p>
+
+<form method="post" action="/travel">
+  <label>Regions (one per line or comma separated: cities, countries or broader regions)
+    <textarea name="regions" rows="3" placeholder="Japan&#10;Southeast Asia&#10;London">{{ regions | join('\n') }}</textarea></label>
+  <button type="submit">Save</button>
+</form>
+
+{% for region in regions %}
+<article>
+  <h4 style="margin-bottom:.4rem;">{{ region }}</h4>
+  {% set found = data.get(region, {}) %}
+  {% if not found or not (found.values() | map('length') | sum) %}
+    <p class="small muted">No reviews found yet. Older ones are searched when you add a region; new ones show up as OMAAT posts them.</p>
+  {% endif %}
+  {% for kind, label in types.items() %}
+    {% if found.get(kind) %}
+    <h6 style="margin:.8rem 0 .3rem;">{{ label }}</h6>
+    <ul class="threads">
+      {% for it in found[kind] %}
+      <li>
+        {% if (it.extra or {}).get('image') %}<img src="{{ it.extra.image }}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:96px;height:64px;object-fit:cover;border-radius:6px;flex:0 0 auto;">{% endif %}
+        <div>
+          <a class="title" href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>
+          <div class="meta">{{ (it.extra or {}).get('review', {}).get('subject', '') }}{% if it.published_at %} · {{ it.published_at.strftime('%b %-d, %Y') }}{% endif %}</div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  {% endfor %}
+</article>
+{% else %}
+<p class="muted">Add a region to start.</p>
+{% endfor %}
+{% endblock %}

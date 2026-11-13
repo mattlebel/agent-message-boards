@@ -53,6 +53,9 @@ DEFAULTS: dict[str, Any] = {
     "applied_migrations": [],
     "youtube_unresolved": [],
     "topic_thresholds": {"youtube": 5},  # minimum score for a thread; topics not listed use 7
+    "card_rules": "",  # empty = built-in rules in app/wallet.py (editable on the Wallet page)
+    "travel_regions": [],  # places to collect One Mile at a Time reviews for
+    "travel_backfilled": [],  # regions whose OMAAT archive has been searched
     "share_secret": "",  # signs the 24-hour email links; created automatically
 }
 

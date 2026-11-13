@@ -258,3 +258,17 @@ class ReadingItem(Base):
     thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     newsletter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # edition it went out in
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class WalletCard(Base):
+    """A credit card the owner holds (or held recently), for card-offer eligibility."""
+
+    __tablename__ = "wallet_cards"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    issuer: Mapped[str] = mapped_column(String(60), default="")
+    opened: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # first of the month
+    business: Mapped[bool] = mapped_column(Boolean, default=False)
+    counts_524: Mapped[bool] = mapped_column(Boolean, default=True)
+    closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

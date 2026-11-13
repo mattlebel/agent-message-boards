@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Wallet{% endblock %}
+{% block content %}
+<h2>Wallet</h2>
+<p class="muted">Card offers you can't get, and all business card offers, are filtered out before they reach
+  the board or the newsletter. The agents see this list too.</p>
+
+<article>
+  <h5 style="margin-bottom:.3rem;">Chase 5/24: {{ n524 }}/5</h5>
+  <p class="small muted" style="margin:0;">
+    {% if counting %}Counting: {% for c in counting %}{{ c.name }} ({{ opened_label(c) }}){% if not loop.last %}, {% endif %}{% endfor %}.
+    {% if next_drop %}The oldest drops off in {{ next_drop.strftime('%b %Y') }}.{% endif %}
+    {% else %}No cards opened in the last 24 months count yet.{% endif %}
+    {% if n524 >= 5 %}<b>Chase cards are filtered out until you're under 5.</b>{% endif %}
+  </p>
+</article>
+
+<table class="compact">
+  <thead><tr><th>Card</th><th>Opened</th><th>Counts for 5/24</th><th></th></tr></thead>
+  <tbody>
+  {% for c in cards %}
+  <tr {% if c.closed %}style="opacity:.55"{% endif %}>
+    <td><b>{{ c.name }}</b> <span class="muted small">{{ c.issuer }}{% if c.business %} · business{% endif %}{% if c.closed %} · closed{% endif %}</span></td>
+    <td class="small">{{ opened_label(c) }}</td>
+    <td class="small">{{ 'yes' if c.counts_524 else 'no' }}</td>
+    <td class="btn-row">
+      <form class="inline-form" method="post" action="/wallet/{{ c.id }}/toggle"><button class="secondary outline" type="submit">{{ 'Reopen' if c.closed else 'Mark closed' }}</button></form>
+      <form class="inline-form" method="post" action="/wallet/{{ c.id }}/delete" onsubmit="return confirm('Remove {{ c.name }}?')"><button class="secondary outline" type="submit">Remove</button></form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No cards yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details open>
+  <summary role="button" class="outline">Add a card</summary>
+  <form method="post" action="/wallet">
+    <div class="grid">
+      <label>Card name <input name="name" required placeholder="Chase Sapphire Reserve"></label>
+      <label>Issuer
+        <select name="issuer">{% for i in issuers %}<option>{{ i }}</option>{% endfor %}</select></label>
+      <label>Opened (month) <input type="month" name="opened"></label>
+    </div>
+    <div class="grid">
+      <label><input type="checkbox" name="business" value="true"> Business card</label>
+      <label>Counts toward 5/24
+        <select name="counts_524">
+          <option value="auto">Automatic (personal yes; business only Capital One / Discover)</option>
+          <option value="yes">Yes</option><option value="no">No</option>
+        </select></label>
+    </div>
+    <p class="small muted">Include authorized-user cards too; they count toward 5/24. Closed cards still count if opened in the last 24 months, and matter for once-per-lifetime bonuses.</p>
+    <button type="submit">Add card</button>
+  </form>
+</details>
+
+<details>
+  <summary role="button" class="secondary outline">Eligibility rules</summary>
+  <form method="post" action="/wallet/rules">
+    <textarea name="rules" rows="10">{{ rules }}</textarea>
+    <p class="small muted">Issuers change these often; edit them to match. The 5/24 count, one Sapphire at a time, cards you already hold and business offers are also enforced in code. Clear the box to restore the defaults.</p>
+    <button type="submit">Save rules</button>
+  </form>
+</details>
+
+<h4>Recently filtered</h4>
+<table class="compact">
+  <tbody>
+  {% for i in filtered %}
+  <tr><td>{% if i.url %}<a href="{{ i.url }}" target="_blank" rel="noopener">{{ i.title[:100] }}</a>{% else %}{{ i.title[:100] }}{% endif %}
+    <div class="small muted">{{ i.triage_note }}</div></td></tr>
+  {% else %}
+  <tr><td class="muted">Nothing filtered in the last two weeks.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

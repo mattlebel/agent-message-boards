@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.wallet import profile_text as wallet_profile
 from app import config, llm, settings_store, style
 from app.db import utcnow
 from app.models import Item, Topic
@@ -63,7 +64,7 @@ def triage(session: Session) -> int:
     items = [i for i in items if i.status == "new"]
     if not items:
         return 0
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     by_topic: dict[int, list[Item]] = defaultdict(list)
     for it in items:
         by_topic[it.topic_id].append(it)
@@ -208,7 +209,7 @@ def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertD
     ]
     if not urgent_items:
         return []
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     out: list[tuple[Item, AlertDecision]] = []
     by_topic: dict[int, list[Item]] = defaultdict(list)
     for it in urgent_items:

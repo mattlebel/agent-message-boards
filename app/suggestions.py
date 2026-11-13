@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.wallet import profile_text as wallet_profile
 from app import config, emailer, llm, settings_store, style
 from app.db import utcnow
 from app.models import Agent, Feedback, Newsletter, Post, Source, Thread, Topic, TopicSuggestion
@@ -50,7 +51,7 @@ def _source_config(s: _SuggestedSource) -> dict:
 
 
 def generate(session: Session) -> list[TopicSuggestion]:
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     topics = list(session.scalars(select(Topic)))
     past = list(session.scalars(select(TopicSuggestion).order_by(TopicSuggestion.id.desc()).limit(40)))
     liked = list(

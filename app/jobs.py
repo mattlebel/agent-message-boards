@@ -13,7 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import config, discussion, inbound, ingest, llm, newsletter, personas, settings_store, suggestions, triage
+from app import (config, discussion, inbound, ingest, llm, newsletter, personas, settings_store, suggestions,
+                 travel, triage, wallet)
 from app.db import init_db, job_lock, session_scope, utcnow
 from app.models import Agent, JobRun
 
@@ -77,12 +78,15 @@ def cycle(session: Session) -> str:
     new += ebay_digests(session)
     alerts = alerts_for_pending(session)
     scored = triage.triage(session)
+    filtered = wallet.check_offers(session)  # business and ineligible card offers never reach the board
+    travel.classify_new(session)
     n = int(settings_store.get(session, "threads_per_cycle"))
     picked = triage.pick_for_discussion(session, n)
     threads = discussion.discuss(session, picked)
     revisited = discussion.revisit(session)
     return (
-        f"{len(new)} new items, {alerts} alerts, {scored} scored, {len(picked)} picked, "
+        f"{len(new)} new items, {alerts} alerts, {scored} scored, {filtered} card offers filtered, "
+        f"{len(picked)} picked, "
         f"{len(threads)} threads, {revisited} revisits, spent today ${llm.spent_today():.2f}"
     )
 

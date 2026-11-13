@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.wallet import profile_text as wallet_profile
 from app import config, llm, settings_store, style
 from app.db import utcnow
 from app.models import Agent, Feedback, Item, Post, Thread, Topic
@@ -65,7 +66,7 @@ def steering_for(session: Session, agent: Agent) -> str:
 
 def agent_system(session: Session, agent: Agent) -> str:
     owner = settings_store.get(session, "owner_name")
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     p = agent.persona or {}
     opinions = "\n".join(f"- {o}" for o in p.get("opinions", []))
     steering = steering_for(session, agent)

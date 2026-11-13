@@ -17,7 +17,8 @@ from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import llm, settings_store, style
+from app.wallet import profile_text as wallet_profile
+from app import llm, style
 from app.db import utcnow
 from app.models import Item, Post, ReadingItem, Thread, Topic
 from app.sources.base import SourceError, dedupe_key, get, html_to_text
@@ -96,7 +97,7 @@ def _fetch(url: str) -> tuple[str, str]:
 
 def _summarize(session: Session, row: ReadingItem) -> tuple[_Summary, str]:
     """Summary plus the article text we got (empty if Claude fetched it)."""
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     system = (
         "You summarize articles for one busy reader. Report what the piece actually says, plainly, with "
         "its key facts and numbers. No hype, no filler, nothing the article doesn't support.\n\n"

@@ -23,7 +23,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions, triage, youtube
+from app import (config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
+                 suggestions, travel, triage, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -32,6 +33,7 @@ from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
     Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, ReadingItem, Source, Thread, Topic,
+    WalletCard,
     TopicSuggestion, YoutubeChannel,
 )
 from app.seed import run_migrations, seed
@@ -628,6 +630,89 @@ def reading_delete(row_id: int, user=Depends(require_user), session: Session = D
         session.delete(row)
         session.commit()
     return back("/reading")
+
+
+# --- wallet (card eligibility) --------------------------------------------------------------
+
+
+@app.get("/wallet", response_class=HTMLResponse)
+def wallet_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    cards = list(session.scalars(select(WalletCard).order_by(WalletCard.closed, WalletCard.opened.desc())))
+    n, counting, next_drop = wallet.count_524(session)
+    since = utcnow() - timedelta(days=14)
+    filtered = [i for i in session.scalars(select(Item).where(Item.fetched_at >= since, Item.status == "skipped"))
+                if (i.triage_note or "").startswith("Filtered:")][:30]
+    return render(request, "wallet.html", cards=cards, n524=n, counting=counting, next_drop=next_drop,
+                  rules=wallet.rules_text(session), issuers=wallet.ISSUERS, filtered=filtered,
+                  opened_label=wallet.opened_label)
+
+
+@app.post("/wallet")
+def wallet_add(request: Request, name: str = Form(...), issuer: str = Form(""), opened: str = Form(""),
+               business: bool = Form(False), counts_524: str = Form("auto"), user=Depends(require_user),
+               session: Session = Depends(get_session)):
+    from datetime import datetime as _dt
+
+    when = None
+    if re.fullmatch(r"\d{4}-\d{2}", opened.strip()):
+        when = _dt.strptime(opened.strip() + "-01", "%Y-%m-%d")
+    if counts_524 == "auto":
+        # Personal cards count; business cards only from issuers that report them to personal credit.
+        counts = (not business) or issuer in ("Capital One", "Discover")
+    else:
+        counts = counts_524 == "yes"
+    session.add(WalletCard(name=name.strip()[:200], issuer=issuer, opened=when, business=business, counts_524=counts))
+    session.commit()
+    flash(request, f"Added {name.strip()}.")
+    return back("/wallet")
+
+
+@app.post("/wallet/rules")
+def wallet_rules(request: Request, rules: str = Form(""), user=Depends(require_user),
+                 session: Session = Depends(get_session)):
+    text = rules.strip()
+    settings_store.set(session, "card_rules", "" if text == wallet.DEFAULT_CARD_RULES.strip() else text)
+    session.commit()
+    flash(request, "Rules saved. They apply from the next cycle.")
+    return back("/wallet")
+
+
+@app.post("/wallet/{card_id}/toggle")
+def wallet_toggle(card_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    card = session.get(WalletCard, card_id)
+    if card:
+        card.closed = not card.closed
+        session.commit()
+    return back("/wallet")
+
+
+@app.post("/wallet/{card_id}/delete")
+def wallet_delete(card_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    card = session.get(WalletCard, card_id)
+    if card:
+        session.delete(card)
+        session.commit()
+    return back("/wallet")
+
+
+# --- travel (trip reports by region) --------------------------------------------------------
+
+
+@app.get("/travel", response_class=HTMLResponse)
+def travel_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    return render(request, "travel.html", regions=travel.regions(session), data=travel.page_data(session),
+                  types=travel.TYPES)
+
+
+@app.post("/travel")
+def travel_save(request: Request, background: BackgroundTasks, regions: str = Form(""),
+                user=Depends(require_user), session: Session = Depends(get_session)):
+    wanted = list(dict.fromkeys(r.strip() for r in re.split(r"[\n,]+", regions) if r.strip()))[:30]
+    settings_store.set(session, "travel_regions", wanted)
+    session.commit()
+    background.add_task(run_bg, lambda s: (travel.classify_new(s), travel.backfill_new_regions(s)))
+    flash(request, "Saved. Searching One Mile at a Time for reviews from new regions; refresh in a minute or two.")
+    return back("/travel")
 
 
 # --- suggestions -------------------------------------------------------------------------

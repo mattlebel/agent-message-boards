@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, llm, settings_store
+from app.wallet import profile_text as wallet_profile
+from app import config, llm
 from app.models import InboundEmail, Item, Topic
 from app.sources.base import dedupe_key, html_to_text
 
@@ -81,7 +82,7 @@ def process_email(session: Session, row: InboundEmail, email: dict) -> None:
         return
     row.topic_id = topic.id
 
-    profile = settings_store.get(session, "profile")
+    profile = wallet_profile(session)
     res = llm.generate(
         purpose="inbound_extract",
         role="fast",
