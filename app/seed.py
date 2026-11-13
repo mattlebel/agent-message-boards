@@ -242,11 +242,28 @@ def _videos_to_newsletter(session: Session) -> str:
     return f"{moved} recent videos queued for the newsletter"
 
 
+def _rescore_videos(session: Session) -> str:
+    """Recent subscription videos get scored again with the YouTube brief and the lower threshold."""
+    from datetime import timedelta
+
+    from app.db import utcnow
+    from app.models import Item
+
+    since = utcnow() - timedelta(days=3)
+    n = 0
+    for item in session.scalars(select(Item).where(Item.status.in_(["video", "scored"]), Item.fetched_at >= since)):
+        if (item.extra or {}).get("source_kind") == "youtube" and "/shorts/" not in (item.url or ""):
+            item.status, item.score, item.triage_note = "new", None, ""
+            n += 1
+    return f"{n} videos queued for rescoring"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
     ("2026-11-12-ebay-digests", _ebay_digests),
     ("2026-11-13-videos-to-newsletter", _videos_to_newsletter),
+    ("2026-11-13-rescore-videos", _rescore_videos),
 ]
 
 

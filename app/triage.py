@@ -60,10 +60,6 @@ def triage(session: Session) -> int:
     )
     for it in [i for i in items if (i.extra or {}).get("kind") == "ebay_digest"]:
         it.score, it.triage_note, it.status = 9.0, "Twice-daily eBay digest", "scored"
-    # Videos from your subscriptions aren't judged against your profile (subscribing already says you
-    # care); they're listed in the newsletter's "New on YouTube" section instead of getting threads.
-    for it in [i for i in items if (i.extra or {}).get("source_kind") == "youtube"]:
-        it.status = "video"
     items = [i for i in items if i.status == "new"]
     if not items:
         return 0
@@ -84,6 +80,14 @@ def triage(session: Session) -> int:
                 "Concrete news, deals with real value, upcoming races/events, drops, and lively community "
                 "threads score high. Notes are one plain line, no hype.\n\nAbout the owner:\n" + profile
             )
+            if any((i.extra or {}).get("source_kind") == "youtube" for i in chunk):
+                system += (
+                    "\n\nThese are new videos from YouTube channels the owner subscribes to, so he already "
+                    "likes these creators. Score how worth watching each video is: substance over filler, "
+                    "a real update or story over a sponsor read or a rerun. Don't mark a video down because its "
+                    "subject isn't in his profile; his subscriptions are his interests. Livestream replays, "
+                    "trailers and clip compilations score low."
+                )
             user = (
                 f"Today is {datetime.now(config.TZ):%A %B %d, %Y}. Score down anything whose dates have "
                 "already passed (deadlines, registration windows, events, expired offers).\n"
@@ -120,6 +124,18 @@ def triage(session: Session) -> int:
     return scored
 
 
+DEFAULT_THRESHOLD = 7.0
+
+
+def threshold_for(session: Session, topic: Topic) -> float:
+    """Minimum score for a thread (and, for YouTube, the newsletter list). Set per topic on its page."""
+    custom = settings_store.get(session, "topic_thresholds") or {}
+    try:
+        return float(custom.get(topic.slug, DEFAULT_THRESHOLD))
+    except (TypeError, ValueError):
+        return DEFAULT_THRESHOLD
+
+
 def pick_for_discussion(session: Session, n: int) -> list[Item]:
     """Best items across topics, spread out so one topic can't take every slot."""
     since = utcnow() - timedelta(days=3)
@@ -127,9 +143,10 @@ def pick_for_discussion(session: Session, n: int) -> list[Item]:
         session.scalars(
             select(Item)
             .join(Topic)
-            .where(Item.status == "scored", Item.score >= 7, Item.fetched_at >= since, Topic.active)
+            .where(Item.status == "scored", Item.score.is_not(None), Item.fetched_at >= since, Topic.active)
         )
     )
+    candidates = [i for i in candidates if i.score >= threshold_for(session, i.topic)]
     def rank(i: Item) -> float:
         return (i.score or 0) + (i.topic.priority - 3) * 0.6
 

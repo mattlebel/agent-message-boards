@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions, youtube
+from app import config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style, suggestions, triage, youtube
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -387,16 +387,27 @@ def topic_page(request: Request, topic_id: int, user=Depends(require_user), sess
     items = list(session.scalars(select(Item).where(Item.topic_id == topic.id).order_by(Item.id.desc()).limit(40)))
     agents = [a for a in session.scalars(select(Agent).where(Agent.active)) if topic.slug in (a.interests or [])]
     return render(request, "topic.html", topic=topic, items=items, kinds=KINDS, agents=agents, nav="topics",
-                  kinds_json=json.dumps(KINDS))
+                  kinds_json=json.dumps(KINDS), threshold=triage.threshold_for(session, topic))
 
 
 @app.post("/topics/{topic_id}")
 def update_topic(request: Request, topic_id: int, name: str = Form(...), description: str = Form(""),
                  priority: int = Form(3), urgent: bool = Form(False), urgent_criteria: str = Form(""),
-                 active: bool = Form(False), user=Depends(require_user), session: Session = Depends(get_session)):
+                 active: bool = Form(False), threshold: str = Form(""), user=Depends(require_user),
+                 session: Session = Depends(get_session)):
     topic = session.get(Topic, topic_id)
     topic.name, topic.description, topic.priority = name.strip(), description.strip(), priority
     topic.urgent, topic.urgent_criteria, topic.active = urgent, urgent_criteria.strip(), active
+    thresholds = dict(settings_store.get(session, "topic_thresholds") or {})
+    try:
+        value = float(threshold) if threshold.strip() else None
+    except ValueError:
+        value = None
+    if value is None:
+        thresholds.pop(topic.slug, None)  # back to the default (YouTube's default is 5, others 7)
+    else:
+        thresholds[topic.slug] = max(0.0, min(10.0, value))  # stored as entered, even if it's 7
+    settings_store.set(session, "topic_thresholds", thresholds)
     session.commit()
     flash(request, "Saved.")
     return back(f"/topics/{topic_id}")

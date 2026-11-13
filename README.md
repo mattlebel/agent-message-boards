@@ -26,7 +26,7 @@ Everything runs on Render: a web service, Postgres, and a cron job every 15 minu
 
 **Links in emails.** Board links in the newsletter and alert emails carry a signed key, so they open that one thread read-only without signing in, for 24 hours after the email is delivered. After that they ask you to sign in. The signing secret is stored in the database (the `share_secret` setting), because the scheduled job signs the links and the web service checks them. Deleting that setting revokes every outstanding link.
 
-**YouTube.** New videos from your subscriptions (Shorts skipped) aren't scored or turned into threads; subscribing already says you care. They're listed in the newsletter's "New on YouTube" section, one line each, then marked as sent.
+**YouTube.** New videos from your subscriptions (Shorts skipped) are scored with their own brief: you already like these creators, so a video is judged on whether it's worth watching, not on whether its subject is in your profile. YouTube's threshold is 5 instead of the usual 7. Videos at or above it go in the newsletter's "New on YouTube" list, and the best can get a thread. Each topic's threshold can be changed on its page.
 
 **Images in emails.** Items keep a picture when their source has one (Instagram/RSS images, YouTube thumbnails, Shopify product photos, eBay listing photos, a page's preview image). Alert emails lead with the picture, and the newsletter can show up to 4, placed next to the item they belong to. Only images the app collected are allowed; anything else the writer adds is removed.
 

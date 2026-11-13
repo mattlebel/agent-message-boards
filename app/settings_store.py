@@ -52,6 +52,7 @@ DEFAULTS: dict[str, Any] = {
     "paused": False,
     "applied_migrations": [],
     "youtube_unresolved": [],
+    "topic_thresholds": {"youtube": 5},  # minimum score for a thread; topics not listed use 7
     "share_secret": "",  # signs the 24-hour email links; created automatically
 }
 

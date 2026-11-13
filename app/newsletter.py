@@ -117,7 +117,7 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
             .limit(15)
         )
     )
-    leftovers = [i for i in leftovers if i.id not in discussed]
+    leftovers = [i for i in leftovers if i.id not in discussed and (i.extra or {}).get("source_kind") != "youtube"]
     return threads[:12], leftovers
 
 
@@ -144,9 +144,16 @@ def failing_sources_note(session: Session) -> str:
 
 
 def new_videos(session: Session) -> list[Item]:
-    """Subscription videos not yet in a newsletter (last 3 days), grouped by channel."""
+    """Subscription videos at or above the YouTube threshold, not yet in a newsletter or a thread."""
+    from app.triage import threshold_for
+
     since = utcnow() - timedelta(days=3)
-    rows = list(session.scalars(select(Item).where(Item.status == "video", Item.fetched_at >= since)))
+    rows = list(session.scalars(
+        select(Item).join(Topic)
+        .where(Item.fetched_at >= since, Item.score.is_not(None), Item.status.in_(["scored", "picked"]))
+    ))
+    rows = [i for i in rows if (i.extra or {}).get("source_kind") == "youtube"
+            and not (i.extra or {}).get("newsletter_id") and i.score >= threshold_for(session, i.topic)]
     rows.sort(key=lambda i: ((i.extra or {}).get("channel") or "", i.published_at or i.fetched_at))
     return rows[:30]
 
@@ -247,7 +254,7 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     for r in saved:
         r.newsletter_id = nl.id
     for v in videos:
-        v.status = "sent"
+        v.extra = {**(v.extra or {}), "newsletter_id": nl.id}
     session.commit()
     return nl
 
