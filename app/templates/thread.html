@@ -13,6 +13,8 @@
 
 {% if thread.item %}
 <article class="source-card">
+  {% set picture = (thread.item.extra or {}).get('image') %}
+  {% if picture %}<img src="{{ picture }}" alt="" loading="lazy" referrerpolicy="no-referrer" style="max-width:100%;max-height:340px;border-radius:6px;margin-bottom:.6rem;">{% endif %}
   <p><b>{{ thread.item.title }}</b></p>
   <p class="small muted">
     {{ (thread.item.extra or {}).get('source_name', '') }}

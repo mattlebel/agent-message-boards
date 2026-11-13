@@ -109,13 +109,14 @@ def fetch_ebay(source, session) -> list[RawItem]:
                 if rec.get("bids", 0) > 0:
                     sales.append({"id": item_id, "title": rec.get("title", ""), "price": rec.get("price", 0),
                                   "kind": "auction", "bids": rec.get("bids", 0), "url": rec.get("url", ""),
-                                  "ended": now.isoformat()})
+                                  "image": rec.get("image", ""), "ended": now.isoformat()})
                 live.pop(item_id)
             elif stale:
                 live.pop(item_id)
         elif complete_view and not (end and end <= now):
             sales.append({"id": item_id, "title": rec.get("title", ""), "price": rec.get("price", 0),
-                          "kind": "fixed", "bids": 0, "url": rec.get("url", ""), "ended": now.isoformat()})
+                          "kind": "fixed", "bids": 0, "url": rec.get("url", ""), "image": rec.get("image", ""),
+                          "ended": now.isoformat()})
             live.pop(item_id)
         elif stale or (end and end <= now):
             live.pop(item_id)
@@ -126,7 +127,7 @@ def fetch_ebay(source, session) -> list[RawItem]:
             title=(it.get("title") or "")[:200], price=_price(it), bids=it.get("bidCount", 0) or 0,
             end=it.get("itemEndDate", ""), auction="AUCTION" in (it.get("buyingOptions") or []),
             url=(it.get("itemWebUrl") or "").split("?")[0], created=it.get("itemCreationDate", ""),
-            condition=it.get("condition", ""),
+            condition=it.get("condition", ""), image=(it.get("image") or {}).get("imageUrl", ""),
         )
         live[item_id] = rec
 
@@ -173,7 +174,8 @@ def build_digests(source, now: datetime | None = None) -> list[RawItem]:
             title=f"Inciardi on eBay: last {len(recent)} sales over ${min_sale:,.0f}, highest first",
             url=f"https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1",
             body="\n".join(_sale_line(i + 1, s) for i, s in enumerate(recent)) + f"\n\n{note}",
-            extra={"kind": "ebay_digest", "digest": "sales", "urgent_checked": True},
+            extra={"kind": "ebay_digest", "digest": "sales", "urgent_checked": True,
+                   "image": recent[0].get("image", "")},
         ))
         last["sale_ids"] = sale_ids
 
@@ -186,7 +188,8 @@ def build_digests(source, now: datetime | None = None) -> list[RawItem]:
             title=f"Inciardi on eBay: {len(newest)} newest listings",
             url=f"https://www.ebay.com/sch/i.html?_nkw={query}&_sop=10",
             body="\n".join(_listing_line(i + 1, rec) for i, (_, rec) in enumerate(newest)) + f"\n\n{note}",
-            extra={"kind": "ebay_digest", "digest": "newest", "urgent_checked": True},
+            extra={"kind": "ebay_digest", "digest": "newest", "urgent_checked": True,
+                   "image": newest[0][1].get("image", "")},
         ))
         last["newest_ids"] = newest_ids
 

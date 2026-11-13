@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import feedparser
 
-from app import config
+from app import config, images
 from app.db import utcnow
 from app.sources.base import RawItem, SourceError, get, html_to_text, http
 
@@ -48,6 +48,10 @@ def fetch_rss(source, session) -> list[RawItem]:
         if not _matches(cfg, e.get("title", ""), summary, tags):
             continue
         link = e.get("link", "")
+        extra = {"tags": tags[:300]} if tags else {}
+        image = images.from_feed_entry(e)
+        if image:
+            extra["image"] = image
         items.append(
             RawItem(
                 key=f"rss:{e.get('id') or link}",
@@ -56,7 +60,7 @@ def fetch_rss(source, session) -> list[RawItem]:
                 body=summary,
                 author=e.get("author", ""),
                 published_at=_entry_time(e),
-                extra={"tags": tags[:300]} if tags else {},
+                extra=extra,
             )
         )
     return items
@@ -211,7 +215,8 @@ def _fetch_channel(channel_id: str, max_age: timedelta) -> list[RawItem]:
                 body=html_to_text(desc, 1500),
                 author=channel_title,
                 published_at=published,
-                extra={"channel": channel_title, "channel_id": channel_id, "video_id": vid},
+                extra={"channel": channel_title, "channel_id": channel_id, "video_id": vid,
+                       "image": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"},
             )
         )
     return out

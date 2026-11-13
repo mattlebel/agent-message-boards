@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from lxml import etree
 from pydantic import Field
 
-from app import config
+from app import config, images
 from app import llm as llm_models
 from app.db import utcnow
 from app.sources.base import RawItem, SourceError, get, html_to_text
@@ -104,14 +104,15 @@ def _sitemap_urls(url: str, depth: int = 0) -> list[tuple[str, str]]:
     return out
 
 
-def _page_title(url: str) -> tuple[str, str]:
+def _page_title(url: str) -> tuple[str, str, str]:
+    """(title, text, preview image) for a page."""
     try:
         resp = get(url)
         soup = BeautifulSoup(resp.text, "lxml")
         title = (soup.title.string or "").strip() if soup.title else ""
-        return title, html_to_text(resp.text, 1500)
+        return title, html_to_text(resp.text, 1500), images.from_html(resp.text, str(resp.url))
     except Exception:
-        return "", ""
+        return "", "", ""
 
 
 def fetch_sitemap(source, session) -> list[RawItem]:
@@ -134,7 +135,7 @@ def fetch_sitemap(source, session) -> list[RawItem]:
     for page_url, lastmod in entries:
         if page_url in seen:
             continue
-        title, text = _page_title(page_url) if len(items) < 10 else ("", "")
+        title, text, image = _page_title(page_url) if len(items) < 10 else ("", "", "")
         slug = urlparse(page_url).path.strip("/").split("/")[-1].replace("-", " ")
         items.append(
             RawItem(
@@ -142,7 +143,7 @@ def fetch_sitemap(source, session) -> list[RawItem]:
                 title=f"New page: {title or slug or page_url}",
                 url=page_url,
                 body=text,
-                extra={"lastmod": lastmod, "kind": "new_page"},
+                extra={"lastmod": lastmod, "kind": "new_page", **({"image": image} if image else {})},
             )
         )
     return items[:30]
@@ -180,7 +181,8 @@ def fetch_shopify(source, session) -> list[RawItem]:
                 url=f"{base}/products/{p.get('handle')}",
                 body=html_to_text(p.get("body_html") or "", 1500) + (f"\nPrice: ${price}" if price else ""),
                 published_at=None,
-                extra={"kind": "new_product", "price": price},
+                extra={"kind": "new_product", "price": price,
+                       **({"image": p["images"][0].get("src", "")} if p.get("images") else {})},
             )
         )
     return items

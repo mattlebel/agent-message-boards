@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import config, emailer, llm, reading, settings_store, share, style
+from app import config, emailer, images, llm, reading, settings_store, share, style
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Source, Thread, Topic
@@ -48,6 +48,9 @@ Structure (markdown):
 5. If there are dated actions, end with "## Dates" - a short list of what to do and when.
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
+Images: when an item in the material has an "Image:" URL, you may show it once, with markdown
+![a short plain description](url) on its own line right after the paragraph about that item. Use up to 4,
+favoring drops, alerts, prints and places. Only use Image URLs from the material.
 Facts: only use facts present in the material. Opinions and jokes are yours.
 Length: 700-1,200 words, shorter on a slow day. Never pad.
 Subject line: specific and wry, about the lead item. No counted lists ("five X, two Y, zero Z").
@@ -63,6 +66,20 @@ class _Edition(BaseModel):
     markdown: str = Field(description="The full newsletter body in markdown, with footnotes")
 
 
+def keep_known_images(md: str, allowed: set[str], limit: int = 4) -> str:
+    """Remove markdown images whose URL we didn't provide (no invented images), and cap the count."""
+    kept = 0
+
+    def repl(m):
+        nonlocal kept
+        if m.group(2) in allowed and kept < limit:
+            kept += 1
+            return m.group(0)
+        return ""
+
+    return re.sub(r"!\[([^\]]*)\]\((\S+?)\)", repl, md or "")
+
+
 def thread_url(thread_id: int) -> str:
     return f"{config.BASE_URL}/t/{thread_id}"
 
@@ -71,6 +88,8 @@ def _thread_material(t: Thread, max_chars: int = 3500) -> str:
     head = f"### Thread: {t.title}\nBoard URL: {thread_url(t.id)}\nSection: {t.topic.name if t.topic else 'General'}"
     if t.item:
         head += f"\nOriginal source: {t.item.url or '(none)'}\nAbout: {t.item.title}. {t.item.body[:700]}"
+        if images.for_item(t.item):
+            head += f"\nImage: {images.for_item(t.item)}"
     posts = []
     for p in t.posts:
         who = f"@{p.agent.handle}" if p.agent else "@owner (the reader)"
@@ -144,6 +163,9 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         )
     )
     previous = "\n\n".join(f"Subject: {n.subject}\n{n.markdown[:1500]}" for n in recent)
+    images.fill_missing(session, [t.item for t in threads[:6] if t.item])
+    session.commit()
+    allowed_images = {images.for_item(t.item) for t in threads if t.item} - {""}
     material = "\n\n---\n\n".join(_thread_material(t) for t in threads)
     extras = "\n".join(
         f"- [{i.topic.name}] {i.title} ({i.url}) {i.triage_note}" for i in leftovers
@@ -157,7 +179,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
             "THE READER'S READING LIST (links they saved to read). Give these their own section, "
             "'## From your reading list', after the main section: one short paragraph per link with "
             "what it says, why it matters to them if it does, the link, and the board's takes when "
-            "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url) + "\n\n"
+            "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url,
+                                                                            allowed_images) + "\n\n"
             if saved else ""
         )
         + (f"YOUR LAST EDITIONS (for running jokes; don't repeat the same items):\n{previous}\n" if previous else "")
@@ -183,6 +206,7 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     ed: _Edition = res.parsed
     ed = style.polish(ed, purpose="newsletter", role="newsletter", system=system, user=user,
                       critical=critical, long_form=True, max_tokens=12000)
+    ed.markdown = keep_known_images(ed.markdown, allowed_images)
     kicker = f"{name} · {now_et:%a %b %-d} · {'Morning' if edition == 'am' else 'Evening'}"
     html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker,
                         emailer.footer(failing_sources_note(session)), ed.preheader)
@@ -228,7 +252,15 @@ def send_alert(session: Session, item: Item, decision: AlertDecision, thread: Th
         ("When", decision.when),
         ("Getting there", decision.travel),
     ]
-    body = "".join(
+    body = ""
+    picture = images.for_item(item)
+    if not picture and item.url:
+        picture = images.fetch_preview(item.url)
+        if picture:
+            item.extra = {**(item.extra or {}), "image": picture}
+    if picture:
+        body += f'<p><img src="{html_lib.escape(picture)}" alt="{html_lib.escape(item.title[:120])}"></p>'
+    body += "".join(
         f"<p><b>{html_lib.escape(k)}:</b> {html_lib.escape(v)}</p>" for k, v in rows if v
     )
     if item.url:

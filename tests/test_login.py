@@ -129,3 +129,19 @@ def test_email_share_links(monkeypatch):
     with session_scope() as s:  # leave the shared test DB as we found it
         for t in s.scalars(select(Thread).where(Thread.id.in_([a_id, b_id]))):
             s.delete(t)
+
+
+def test_share_links_work_across_services(monkeypatch):
+    """The scheduled job signs email links and the web service checks them; their SECRET_KEYs differ."""
+    from datetime import datetime, timedelta, timezone
+
+    from app import share
+
+    init_db()
+    monkeypatch.setattr(config, "SECRET_KEY", "cron-has-no-secret-key")
+    share._cache["secret"] = None
+    token = share.make_token(42, datetime.now(timezone.utc) + timedelta(hours=24))
+
+    monkeypatch.setattr(config, "SECRET_KEY", "web-service-generated-key")
+    share._cache["secret"] = None  # a different process
+    assert share.check_token(42, token) is not None

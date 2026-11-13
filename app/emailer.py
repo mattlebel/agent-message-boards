@@ -78,6 +78,8 @@ def wrap(title: str, body_html: str, kicker: str, footer_html: str, preheader: s
         .replace("<h3>", '<h3 style="font-size:18px;margin:24px 0 6px;">')
         .replace("<blockquote>", '<blockquote style="margin:12px 0;padding:4px 16px;border-left:3px solid #d8cfbd;color:#444;">')
         .replace('<div class="footnote">', '<div class="footnote" style="font-size:14px;color:#555;">')
+        .replace("<img ", '<img width="576" style="width:100%;max-width:576px;height:auto;border-radius:6px;'
+                          'display:block;margin:8px 0 4px;" ')
     )
     return SHELL.format(
         title=html_lib.escape(title),

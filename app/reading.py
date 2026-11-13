@@ -184,10 +184,18 @@ def for_newsletter(session: Session) -> list[ReadingItem]:
     ))
 
 
-def newsletter_material(session: Session, rows: list[ReadingItem], thread_url) -> str:
+def newsletter_material(session: Session, rows: list[ReadingItem], thread_url, allowed_images=None) -> str:
+    """Material for the newsletter's reading section. Adds each link's preview image to allowed_images."""
+    from app import images
+
     parts = []
     for r in rows:
         block = f"### {r.title or r.url}\nLink: {r.url}\nSummary: {r.summary}"
+        picture = images.fetch_preview(r.url)
+        if picture:
+            block += f"\nImage: {picture}"
+            if allowed_images is not None:
+                allowed_images.add(picture)
         if r.why_it_matters:
             block += f"\nWhy it matters to the reader: {r.why_it_matters}"
         if r.instructions:

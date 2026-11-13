@@ -52,6 +52,7 @@ DEFAULTS: dict[str, Any] = {
     "paused": False,
     "applied_migrations": [],
     "youtube_unresolved": [],
+    "share_secret": "",  # signs the 24-hour email links; created automatically
 }
 
 
