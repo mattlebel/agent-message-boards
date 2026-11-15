@@ -102,6 +102,12 @@ def send_daily(session: Session, edition: str, deliver_at: datetime | None = Non
 
 
 def weekly(session: Session) -> str:
+    from app.models import TopicSuggestion
+
+    recent = session.scalar(select(func.count(TopicSuggestion.id))
+                            .where(TopicSuggestion.created_at >= utcnow() - timedelta(hours=12))) or 0
+    if recent:
+        return "ideas already generated in the last 12 hours"  # e.g. a manual run; don't email twice
     rows = suggestions.generate(session)
     suggestions.send_weekly(session, rows)
     distilled = suggestions.distill_feedback(session)
