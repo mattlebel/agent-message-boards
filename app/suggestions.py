@@ -80,9 +80,10 @@ def generate(session: Session) -> list[TopicSuggestion]:
         "2 wildcards that fit who they are. Use web search to find real, currently active sources for each "
         "(RSS feeds, pages that list events or drops). Prefer RSS feeds and pages with stable URLs. "
         "Don't use Reddit or Threads as sources: the board can't read them. Add a websearch source as a "
-        "fallback when in doubt. Each topic needs 1-3 sources. Use an empty string for any field that doesn't "
-        "apply. Respond with JSON only: "
-        '{"suggestions": [{"name", "description", "why", "urgent", "sources": [{"kind", "name", "url", "query"}]}]}'
+        "fallback when in doubt. Each topic needs 1-3 sources. Use an empty string for any text field that "
+        "doesn't apply. Respond with JSON only, in this shape: "
+        '{"suggestions": [{"name": "text", "description": "text", "why": "text", "urgent": true or false, '
+        '"sources": [{"kind": "rss|page_watch|sitemap|websearch", "name": "text", "url": "text", "query": "text"}]}]}'
     )
     res = llm.generate(
         purpose="suggestions",

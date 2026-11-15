@@ -258,12 +258,21 @@ def _rescore_videos(session: Session) -> str:
     return f"{n} videos queued for rescoring"
 
 
+def _retry_travel_backfill(session: Session) -> str:
+    """OMAAT's search feed returns 404, so regions marked as searched found nothing. Search again."""
+    from app import settings_store
+
+    settings_store.set(session, "travel_backfilled", [])
+    return "travel regions queued for a new archive search"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
     ("2026-11-12-ebay-digests", _ebay_digests),
     ("2026-11-13-videos-to-newsletter", _videos_to_newsletter),
     ("2026-11-13-rescore-videos", _rescore_videos),
+    ("2026-11-15-retry-travel-backfill", _retry_travel_backfill),
 ]
 
 

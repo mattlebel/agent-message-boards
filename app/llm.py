@@ -39,7 +39,15 @@ class Lenient(BaseModel):
     @classmethod
     def _null_to_default(cls, value, info):
         field = cls.model_fields.get(info.field_name)
-        if value is not None or field is None:
+        if field is None:
+            return value
+        if field.annotation is bool and isinstance(value, str):
+            # Models sometimes answer a yes/no field with words ("closes Saturday") or "".
+            text = value.strip().lower()
+            if text in ("", "false", "no", "n", "none", "0", "not urgent"):
+                return False
+            return True
+        if value is not None:
             return value
         if not field.is_required():
             return field.get_default(call_default_factory=True)
@@ -237,7 +245,19 @@ def generate(
             try:
                 parsed = schema.model_validate(extract_json(text))
             except (ValidationError, LlmError) as e:
-                raise LlmError(f"could not parse {purpose} output: {e}") from e
+                # Web-search answers aren't schema-constrained. Rather than lose a paid search,
+                # have the fast model reshape the answer into the schema.
+                log.warning("reshaping %s output after parse failure: %s", purpose, str(e)[:300])
+                try:
+                    parsed = generate(
+                        purpose=f"{purpose}_repair", role="fast",
+                        system="Convert the text into the required JSON structure. Keep every fact, name and URL "
+                               "exactly as given; don't add anything.",
+                        user=text[:60000], max_tokens=max_tokens, effort="low", schema=schema, critical=True,
+                        fake=fake,
+                    ).parsed
+                except Exception as e2:
+                    raise LlmError(f"could not parse {purpose} output: {e}") from e2
     return LlmResult(text=text, parsed=parsed, model=model, cost_usd=total_cost, raw=resp)
 
 

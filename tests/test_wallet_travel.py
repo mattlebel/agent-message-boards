@@ -112,3 +112,66 @@ def test_travel_matching_and_pages(monkeypatch):
         from app import settings_store
         settings_store.set(s, "travel_regions", [])
         settings_store.set(s, "travel_backfilled", [])
+
+
+def test_yes_no_fields_accept_words():
+    from app.suggestions import _Suggestions
+
+    raw = {"suggestions": [
+        {"name": "A", "description": "d", "why": "w", "urgent": "", "sources": []},
+        {"name": "B", "description": "d", "why": "w", "urgent": "closes Saturday, Nov 21", "sources": []},
+        {"name": "C", "description": "d", "why": "w", "urgent": "false", "sources": []},
+    ]}
+    assert [x.urgent for x in _Suggestions.model_validate(raw).suggestions] == [False, True, False]
+
+
+def test_failed_scheduled_job_is_retried_up_to_three_times():
+    from app import jobs
+    from app.models import JobRun
+
+    init_db()
+    calls = []
+
+    def flaky(session):
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    for _ in range(5):
+        jobs.run_job("weekly", flaky, key="weekly:test-slot")
+    assert len(calls) == 3
+    jobs.run_job("weekly", lambda s: "ok", key="weekly:test-slot")
+    assert len(calls) == 3  # gave up on this slot
+    with session_scope() as s:
+        for r in s.scalars(select(JobRun).where(JobRun.key.like("weekly:test-slot%"))):
+            s.delete(r)
+
+
+def test_travel_backfill_falls_back_to_web_search(monkeypatch):
+    from app.sources.base import SourceError
+
+    init_db()
+    with session_scope() as s:
+        topic = s.scalar(select(Topic).where(Topic.slug == "travel"))
+        created = topic is None
+        if created:
+            topic = Topic(slug="travel", name="Travel")
+            s.add(topic)
+            s.flush()
+
+        def wp_404(region, limit):
+            raise SourceError("HTTP 404")
+
+        monkeypatch.setattr(travel, "_from_wp_api", wp_404)
+        monkeypatch.setattr(travel, "_from_web_search", lambda region, limit: [
+            {"url": "https://onemileatatime.com/reviews/park-hyatt-kyoto/", "title": "Review: Park Hyatt Kyoto",
+             "summary": "", "published": "2025-04-02", "image": ""}])
+        monkeypatch.setattr(travel.images, "fill_missing", lambda *a, **k: None)
+        assert travel.backfill(s, "Kyoto") == 1
+        item = s.scalar(select(Item).where(Item.url.like("%park-hyatt-kyoto%")))
+        assert item.status == "archive" and item.published_at.year == 2025
+
+        monkeypatch.setattr(travel, "_from_web_search", wp_404)
+        assert travel.backfill(s, "Osaka") is None  # both failed: retried later
+        s.delete(item)
+        if created:
+            s.delete(topic)

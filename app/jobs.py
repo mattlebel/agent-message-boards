@@ -9,7 +9,7 @@ import logging
 import sys
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -80,6 +80,7 @@ def cycle(session: Session) -> str:
     scored = triage.triage(session)
     filtered = wallet.check_offers(session)  # business and ineligible card offers never reach the board
     travel.classify_new(session)
+    travel.backfill_new_regions(session)  # regions whose archive search hasn't worked yet
     n = int(settings_store.get(session, "threads_per_cycle"))
     picked = triage.pick_for_discussion(session, n)
     threads = discussion.discuss(session, picked)
@@ -113,8 +114,17 @@ def weekly(session: Session) -> str:
 def run_job(job: str, fn, *args, key: str | None = None) -> str | None:
     """Run fn(session, *args) with a JobRun record. With a key, each slot only runs once."""
     with session_scope() as s:
-        if key and s.scalar(select(JobRun.id).where(JobRun.key == key)):
-            return None
+        if key:
+            existing = s.scalar(select(JobRun).where(JobRun.key == key))
+            if existing is not None:
+                # A slot runs once, but a failed run gets retried (up to 3 attempts in all).
+                if existing.status != "error":
+                    return None
+                failures = s.scalar(select(func.count(JobRun.id)).where(JobRun.key.like(f"{key}:failed:%"))) or 0
+                if failures >= 2:
+                    return None
+                existing.key = f"{key}:failed:{existing.id}"
+                s.flush()
         run = JobRun(job=job, key=key)
         s.add(run)
         try:

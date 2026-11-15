@@ -12,9 +12,7 @@ import logging
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
-from urllib.parse import quote_plus
 
-import feedparser
 from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,7 +20,7 @@ from sqlalchemy.orm import Session
 from app import images, llm, settings_store
 from app.db import utcnow
 from app.models import Item, Source, Topic
-from app.sources.base import dedupe_key, get, html_to_text, to_naive_utc
+from app.sources.base import dedupe_key, get, html_to_text
 
 log = logging.getLogger(__name__)
 
@@ -103,39 +101,90 @@ def _omaat_source(session: Session) -> tuple[int | None, int | None]:
     return (topic.id if topic else None), None
 
 
-def backfill(session: Session, region: str, limit: int = 30) -> int:
-    """Search OMAAT's archive for reviews of a region (WordPress search feed) and file them."""
+class _Found(llm.Lenient):
+    title: str = ""
+    url: str = ""
+    published: str = ""
+    summary: str = ""
+
+
+class _FoundList(llm.Lenient):
+    items: list[_Found] = Field(default_factory=list)
+
+
+def _from_wp_api(region: str, limit: int) -> list[dict]:
+    """OMAAT's WordPress search API (the search RSS feed returns 404)."""
+    resp = get(f"https://{OMAAT}/wp-json/wp/v2/posts", params={
+        "search": region, "per_page": min(limit, 50), "orderby": "date",
+        "_fields": "link,date,title,excerpt,jetpack_featured_media_url",
+    })
+    rows = []
+    for p in resp.json():
+        rows.append({
+            "url": p.get("link", ""), "title": html_to_text((p.get("title") or {}).get("rendered", ""), 300),
+            "summary": html_to_text((p.get("excerpt") or {}).get("rendered", ""), 1000),
+            "published": (p.get("date") or "")[:10], "image": p.get("jetpack_featured_media_url") or "",
+        })
+    return rows
+
+
+def _from_web_search(region: str, limit: int) -> list[dict]:
+    """Fallback: Claude's web search, limited to onemileatatime.com."""
+    res = llm.generate(
+        purpose="travel_backfill", role="search",
+        system="You find specific review posts on One Mile at a Time. Respond with JSON only.",
+        user=(f"Find One Mile at a Time reviews of flights, airport lounges and hotels in or to/from {region}. "
+              f"Return up to {limit} distinct review posts as JSON: "
+              '{"items": [{"title": "...", "url": "...", "published": "YYYY-MM-DD", "summary": "one line"}]}'),
+        max_tokens=4000, effort="low", schema=_FoundList, web_search=True, max_searches=4,
+        allowed_domains=[OMAAT], critical=True, fake=lambda: _FoundList(items=[]),
+    )
+    return [{"url": f.url, "title": f.title, "summary": f.summary, "published": f.published[:10], "image": ""}
+            for f in res.parsed.items if OMAAT in f.url]
+
+
+def backfill(session: Session, region: str, limit: int = 30) -> int | None:
+    """Find past OMAAT reviews of a region and file them for the Travel page.
+
+    Returns how many posts were added, or None if every search method failed (so it's retried).
+    """
     topic_id, source_id = _omaat_source(session)
     if topic_id is None:
-        return 0
-    added: list[Item] = []
-    for query in (f"{region} review", region):
+        return None
+    rows: list[dict] | None = None
+    for method in (_from_wp_api, _from_web_search):
         try:
-            resp = get(f"https://{OMAAT}/?s={quote_plus(query)}&feed=rss2")
+            rows = method(region, limit)
+            if rows:
+                break
         except Exception as e:
-            log.info("OMAAT search failed for %s: %s", query, e)
+            log.info("OMAAT archive search (%s) failed for %s: %s", method.__name__, region, e)
+    if rows is None:
+        return None
+    added: list[Item] = []
+    for row in rows:
+        link = row["url"]
+        key = dedupe_key(f"rss:{link}")
+        if not link.startswith("http") or session.scalar(
+                select(Item.id).where((Item.dedupe_key == key) | (Item.url == link))):
             continue
-        for e in feedparser.parse(resp.content).entries[:limit]:
-            link = e.get("link", "")
-            key = dedupe_key(f"rss:{e.get('id') or link}")
-            if not link or session.scalar(select(Item.id).where(Item.dedupe_key == key)):
-                continue
-            published = None
-            for attr in ("published_parsed", "updated_parsed"):
-                if e.get(attr):
-                    published = to_naive_utc(datetime(*e[attr][:6]))
-                    break
-            image = images.from_feed_entry(e)
-            item = Item(topic_id=topic_id, source_id=source_id, dedupe_key=key, url=link,
-                        title=(e.get("title") or "")[:1000], body=html_to_text(e.get("summary", "") or "", 2500),
-                        published_at=published, status="archive",  # past reviews: for the Travel page only
-                        extra={"source_name": "One Mile at a Time", "source_kind": "rss",
-                               **({"image": image} if image else {})})
-            session.add(item)
-            added.append(item)
-        session.flush()
+        published = None
+        try:
+            published = datetime.fromisoformat(row["published"]) if row.get("published") else None
+        except ValueError:
+            pass
+        item = Item(topic_id=topic_id, source_id=source_id, dedupe_key=key, url=link,
+                    title=row["title"][:1000] or link, body=row.get("summary", "")[:2500], published_at=published,
+                    status="archive",  # past reviews: for the Travel page only
+                    extra={"source_name": "One Mile at a Time", "source_kind": "rss",
+                           **({"image": row["image"]} if row.get("image") else {})})
+        session.add(item)
+        added.append(item)
     session.commit()
     classify(session, added)
+    images.fill_missing(session, [i for i in added if (i.extra or {}).get("review", {}).get("type") in TYPES],
+                        limit=20)
+    session.commit()
     return len(added)
 
 
@@ -145,7 +194,9 @@ def backfill_new_regions(session: Session) -> None:
         if region.lower() in done:
             continue
         n = backfill(session, region)
-        log.info("travel backfill %s: %d posts", region, n)
+        log.info("travel backfill %s: %s posts", region, n)
+        if n is None:
+            continue  # every method failed; try again next cycle
         done.add(region.lower())
         settings_store.set(session, "travel_backfilled", sorted(done))
         session.commit()
