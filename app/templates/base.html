@@ -22,10 +22,17 @@
         <li><a href="/topics" {% if nav in ('topics', 'topic') %}aria-current="page"{% endif %}>Topics</a></li>
         <li><a href="/agents" {% if nav in ('agents', 'agent') %}aria-current="page"{% endif %}>Agents</a></li>
         <li><a href="/newsletters" {% if nav in ('newsletters', 'newsletter') %}aria-current="page"{% endif %}>Emails</a></li>
-        <li><a href="/suggestions" {% if nav == 'suggestions' %}aria-current="page"{% endif %}>Ideas</a></li>
-        <li><a href="/inbox" {% if nav == 'inbox' %}aria-current="page"{% endif %}>Inbox</a></li>
-        <li><a href="/youtube" {% if nav == 'youtube' %}aria-current="page"{% endif %}>YouTube</a></li>
         <li><a href="/settings" {% if nav == 'settings' %}aria-current="page"{% endif %}>Settings</a></li>
+        <li>
+          <details class="dropdown more-menu">
+            <summary {% if nav in ('suggestions', 'inbox', 'youtube') %}aria-current="page"{% endif %}>More</summary>
+            <ul dir="rtl">
+              <li><a href="/suggestions" {% if nav == 'suggestions' %}aria-current="page"{% endif %}>Ideas</a></li>
+              <li><a href="/inbox" {% if nav == 'inbox' %}aria-current="page"{% endif %}>Inbox</a></li>
+              <li><a href="/youtube" {% if nav == 'youtube' %}aria-current="page"{% endif %}>YouTube</a></li>
+            </ul>
+          </details>
+        </li>
       </ul>
       {% endif %}
     </nav>

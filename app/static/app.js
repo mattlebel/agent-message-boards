@@ -123,3 +123,10 @@
   toggle.addEventListener("change", sync);
   sync();
 })();
+
+// Close the "More" menu when clicking anywhere else.
+document.addEventListener("click", (ev) => {
+  document.querySelectorAll("details.more-menu[open]").forEach((d) => {
+    if (!d.contains(ev.target)) d.removeAttribute("open");
+  });
+});

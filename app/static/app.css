@@ -75,3 +75,9 @@ textarea { min-height: 6rem; }
   .sidebar a { white-space: nowrap; border: 1px solid var(--pico-muted-border-color); padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
   .sidebar .stats, .sidebar form { display: none; }
 }
+
+/* "More" menu in the top nav */
+.more-menu { margin: 0; }
+.more-menu summary { padding: 0.35rem 0.55rem; font-size: 0.95rem; color: var(--pico-primary); border: 0; background: none; }
+.more-menu summary[aria-current="page"] { color: var(--pico-color); }
+.more-menu ul li a { font-size: 0.95rem; }
