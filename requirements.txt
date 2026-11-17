@@ -1,5 +1,4 @@
 anthropic>=1.15,<2
-Authlib==1.9.1
 beautifulsoup4==4.15.0
 fastapi==0.146.0
 feedparser==6.0.14

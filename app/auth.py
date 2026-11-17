@@ -1,7 +1,6 @@
 """Admin sign-in, limited to one email domain (lebel.io by default).
 
-The main way in is a one-time link emailed through Resend. Google sign-in still works
-if GOOGLE_CLIENT_ID is set, and is also what the one-click YouTube import uses.
+The way in is a one-time link emailed through Resend.
 """
 
 from __future__ import annotations
@@ -9,7 +8,6 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta
 
-from authlib.integrations.starlette_client import OAuth
 from fastapi import HTTPException, Request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sqlalchemy import delete, func, select
@@ -17,28 +15,6 @@ from sqlalchemy import delete, func, select
 from app import config
 from app.db import utcnow
 from app.models import LoginToken
-
-oauth = OAuth()
-_GOOGLE_META = "https://accounts.google.com/.well-known/openid-configuration"
-
-if config.GOOGLE_CLIENT_ID:
-    oauth.register(
-        name="google",
-        client_id=config.GOOGLE_CLIENT_ID,
-        client_secret=config.GOOGLE_CLIENT_SECRET,
-        server_metadata_url=_GOOGLE_META,
-        client_kwargs={"scope": "openid email profile"},
-    )
-    # Separate client for the one-time YouTube subscriptions import. It can be any Google
-    # account (e.g. a personal Gmail with YouTube Premium), not just the admin login.
-    oauth.register(
-        name="google_yt",
-        client_id=config.GOOGLE_CLIENT_ID,
-        client_secret=config.GOOGLE_CLIENT_SECRET,
-        server_metadata_url=_GOOGLE_META,
-        client_kwargs={"scope": "openid email https://www.googleapis.com/auth/youtube.readonly"},
-    )
-
 
 class LoginRequired(Exception):
     pass

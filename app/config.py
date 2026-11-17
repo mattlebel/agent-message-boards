@@ -29,8 +29,6 @@ BASE_URL = _env("BASE_URL", "http://localhost:8000").rstrip("/")
 # Local development only: skips login. Never set this on Render.
 DEV_MODE = _flag("DEV_MODE")
 
-GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = _env("GOOGLE_CLIENT_SECRET")
 ALLOWED_EMAIL_DOMAIN = _env("ALLOWED_EMAIL_DOMAIN", "lebel.io").lower()
 
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
@@ -44,9 +42,6 @@ EMAIL_TO = _env("EMAIL_TO", "agent-talk@lebel.io")
 # The domain (or resend.app address domain) you forward newsletters to.
 INBOUND_DOMAIN = _env("INBOUND_DOMAIN", "in.lebel.io")
 
-REDDIT_CLIENT_ID = _env("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET = _env("REDDIT_CLIENT_SECRET")
-REDDIT_USER_AGENT = _env("REDDIT_USER_AGENT", "web:agent-message-boards:v1 (personal use)")
 
 EBAY_CLIENT_ID = _env("EBAY_CLIENT_ID")
 EBAY_CLIENT_SECRET = _env("EBAY_CLIENT_SECRET")

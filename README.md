@@ -56,7 +56,7 @@ Expect about $14/month on Render: $7 web, $6 Postgres, about $1 cron.
 ### 2. Sign-in (emailed link, limited to @lebel.io)
 Nothing to set up beyond Resend (step 3). On the login page you enter your @lebel.io address and get a one-time link by email. It works once, expires in 15 minutes, and asks you to press **Sign in** after it opens, so a mail app that previews links can't use it up. Only `@lebel.io` addresses get a link (`ALLOWED_EMAIL_DOMAIN`), and each address can request 5 links per 15 minutes.
 
-**Optional: Google.** Setting `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` adds a "Sign in with Google" button and the one-click YouTube subscriptions import. Without it, import subscriptions by uploading `subscriptions.csv` from takeout.google.com (YouTube) on the YouTube page, or add channels one at a time. To set it up in Google Cloud Console: create a project; OAuth consent screen → External, Testing, with your @lebel.io address and the Gmail that has your subscriptions as test users; Credentials → OAuth client ID → Web application with redirect URIs `BASE_URL/auth/callback` and `BASE_URL/youtube/callback`; enable YouTube Data API v3.
+YouTube subscriptions come in by pasting channel handles on the YouTube page, or by uploading `subscriptions.csv` from takeout.google.com (YouTube).
 
 ### 3. Resend
 - **Sending:** verify `lebel.io` (or a subdomain) under Domains, then set `EMAIL_FROM` to an address on it.
@@ -68,7 +68,7 @@ Nothing to set up beyond Resend (step 3). On the login page you enter your @lebe
 Then forward or subscribe newsletters to `feeds@in.lebel.io`, where Claude picks the topic, or to `<topic-slug>@in.lebel.io` to send them straight to a topic (e.g. `wirecutter@`, `amex@`, `inciardi@`).
 
 ### 4. Reddit
-Not used. Reddit closed new API access on Oct 31, 2026. r/runnyc is read through Claude web search restricted to `reddit.com/r/runnyc`, which picks up posts once search engines have indexed them (usually within a day).
+Not used. Reddit closed new API access on Oct 31, 2026, and Claude's web search can't read reddit.com. r/runnyc comes in through an RSS.app feed added as an RSS source on its topic.
 
 ### 5. eBay (recommended for Inciardi)
 Create a free keyset at <https://developer.ebay.com> (Production keyset) and set `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`. Turn on "Exempted from Marketplace Account Deletion" for the keyset (the app keeps no eBay user data).

@@ -5,12 +5,7 @@
 <p class="muted">New videos from these channels show up in the “YouTube” topic. Videos are read from each channel's public feed, so no API quota is used.</p>
 <div class="grid">
   <article>
-    <h5>Import from your YouTube account</h5>
-    <p class="small">Sign in with the Google account that has your subscriptions (it can be a personal Gmail). We read the list once and don't keep the token.</p>
-    {% if google %}<a role="button" href="/youtube/connect">Import subscriptions</a>{% else %}<p class="small">Needs the optional Google setup (see the README). The Takeout upload works without it.</p>{% endif %}
-  </article>
-  <article>
-    <h5>Or upload a Takeout CSV</h5>
+    <h5>Upload a Takeout CSV</h5>
     <p class="small">takeout.google.com → YouTube → subscriptions.csv</p>
     <form method="post" action="/youtube/csv" enctype="multipart/form-data">
       <input type="file" name="file" accept=".csv" required>

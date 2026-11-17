@@ -8,7 +8,6 @@ from app.sources import ebay, feeds, web
 
 FETCHERS = {
     "rss": feeds.fetch_rss,
-    "reddit": feeds.fetch_reddit,
     "youtube": feeds.fetch_youtube,
     "page_watch": web.fetch_page_watch,
     "sitemap": web.fetch_sitemap,

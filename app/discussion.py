@@ -16,7 +16,6 @@ from app.wallet import profile_text as wallet_profile
 from app import config, llm, settings_store, style
 from app.db import utcnow
 from app.models import Agent, Feedback, Item, Post, Thread, Topic
-from app.sources.feeds import reddit_top_comments
 from app.triage import AlertDecision, item_brief
 
 log = logging.getLogger(__name__)
@@ -206,10 +205,6 @@ def _post(session: Session, thread: Thread, agent: Optional[Agent], body: str, r
 def _material(item: Item) -> str:
     text = item_brief(item, 2500)
     extra = item.extra or {}
-    if extra.get("source_kind") == "reddit" and extra.get("reddit_id"):
-        comments = reddit_top_comments(extra["reddit_id"])
-        if comments:
-            text += "\n\nTop comments on Reddit:\n" + "\n".join(f"- {c}" for c in comments)
     if extra.get("alert"):
         a = extra["alert"]
         text += f"\n\nAlert details: {a.get('what')} Where: {a.get('where')}. When: {a.get('when')}. Travel: {a.get('travel')}"

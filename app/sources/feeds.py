@@ -1,18 +1,16 @@
-"""RSS/Atom feeds, Reddit, YouTube channel feeds."""
+"""RSS/Atom feeds and YouTube channel feeds."""
 
 from __future__ import annotations
 
-import base64
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import feedparser
 
-from app import config, images
+from app import images
 from app.db import utcnow
-from app.sources.base import RawItem, SourceError, get, html_to_text, http
+from app.sources.base import RawItem, SourceError, get, html_to_text
 
 
 def _entry_time(entry) -> datetime | None:
@@ -66,126 +64,9 @@ def fetch_rss(source, session) -> list[RawItem]:
     return items
 
 
-# --- Reddit -----------------------------------------------------------------
-# Reddit is shutting down open access: new API requests close Oct 31 2026, RSS
-# support ends Nov 13 2026. With credentials we use the OAuth API; without them
-# we try RSS. The "websearch" source kind restricted to reddit.com is the backup.
-
-_reddit_token: dict = {"value": None, "expires": 0.0}
-
-
-def _reddit_access_token() -> str:
-    if _reddit_token["value"] and time.time() < _reddit_token["expires"] - 60:
-        return _reddit_token["value"]
-    auth = base64.b64encode(
-        f"{config.REDDIT_CLIENT_ID}:{config.REDDIT_CLIENT_SECRET}".encode()
-    ).decode()
-    with http() as c:
-        resp = c.post(
-            "https://www.reddit.com/api/v1/access_token",
-            data={"grant_type": "client_credentials"},
-            headers={"Authorization": f"Basic {auth}", "User-Agent": config.REDDIT_USER_AGENT},
-        )
-    if resp.status_code != 200:
-        raise SourceError(f"reddit auth failed: HTTP {resp.status_code}")
-    data = resp.json()
-    _reddit_token.update(value=data["access_token"], expires=time.time() + data.get("expires_in", 3600))
-    return _reddit_token["value"]
-
-
-def _reddit_api(path: str, params: dict | None = None) -> dict | list:
-    token = _reddit_access_token()
-    with http() as c:
-        resp = c.get(
-            f"https://oauth.reddit.com{path}",
-            params=params,
-            headers={"Authorization": f"Bearer {token}", "User-Agent": config.REDDIT_USER_AGENT},
-        )
-    if resp.status_code >= 400:
-        raise SourceError(f"reddit API HTTP {resp.status_code} for {path}")
-    return resp.json()
-
-
-def reddit_enabled() -> bool:
-    return bool(config.REDDIT_CLIENT_ID and config.REDDIT_CLIENT_SECRET)
-
-
-def fetch_reddit(source, session) -> list[RawItem]:
-    cfg = source.config or {}
-    sub = (cfg.get("subreddit") or "").strip().removeprefix("r/")
-    if not sub:
-        raise SourceError("reddit source needs a subreddit")
-    sort = cfg.get("sort", "new")
-    limit = int(cfg.get("limit", 30))
-    min_score = int(cfg.get("min_score", 0))
-    items: list[RawItem] = []
-    if reddit_enabled():
-        data = _reddit_api(f"/r/{sub}/{sort}", {"limit": limit, "raw_json": 1})
-        for child in data.get("data", {}).get("children", []):
-            d = child.get("data", {})
-            if d.get("stickied") or d.get("score", 0) < min_score:
-                continue
-            if not _matches(cfg, d.get("title", ""), d.get("selftext", ""), d.get("link_flair_text") or ""):
-                continue
-            items.append(
-                RawItem(
-                    key=f"reddit:{d['id']}",
-                    title=d.get("title", ""),
-                    url=f"https://www.reddit.com{d.get('permalink', '')}",
-                    body=(d.get("selftext") or "")[:3000],
-                    author=f"u/{d.get('author', '')}",
-                    published_at=datetime.fromtimestamp(d.get("created_utc", 0), tz=timezone.utc).replace(tzinfo=None),
-                    extra={
-                        "subreddit": sub,
-                        "score": d.get("score"),
-                        "num_comments": d.get("num_comments"),
-                        "flair": d.get("link_flair_text"),
-                        "link": d.get("url") if not d.get("is_self") else None,
-                        "reddit_id": d["id"],
-                    },
-                )
-            )
-        return items
-    # No credentials: RSS (works until Reddit turns it off on Nov 13 2026).
-    resp = get(f"https://www.reddit.com/r/{sub}/{sort}/.rss", headers={"User-Agent": config.REDDIT_USER_AGENT})
-    feed = feedparser.parse(resp.content)
-    for e in feed.entries[:limit]:
-        body = html_to_text(e.get("summary", ""), 3000)
-        if not _matches(cfg, e.get("title", ""), body):
-            continue
-        items.append(
-            RawItem(
-                key=f"reddit:{e.get('id')}",
-                title=e.get("title", ""),
-                url=e.get("link", ""),
-                body=body,
-                author=e.get("author", ""),
-                published_at=_entry_time(e),
-                extra={"subreddit": sub},
-            )
-        )
-    return items
-
-
-def reddit_top_comments(reddit_id: str, n: int = 6) -> list[str]:
-    """Best-effort: top comments for a post, so agents can relay what people said."""
-    if not reddit_enabled() or not reddit_id:
-        return []
-    try:
-        data = _reddit_api(f"/comments/{reddit_id}", {"limit": n, "sort": "top", "depth": 1, "raw_json": 1})
-        out = []
-        for child in data[1]["data"]["children"][:n]:
-            d = child.get("data", {})
-            if d.get("body"):
-                out.append(f"u/{d.get('author')} ({d.get('score', 0)} pts): {d['body'][:500]}")
-        return out
-    except Exception:
-        return []
-
-
 # --- YouTube ------------------------------------------------------------------
 # Channel RSS feeds need no API key or quota. The channel list comes from the
-# YouTube page in admin (Google sign-in import, Takeout CSV, or pasted ids).
+# YouTube page in admin (Takeout CSV or pasted handles/ids).
 
 
 def _fetch_channel(channel_id: str, max_age: timedelta) -> list[RawItem]:

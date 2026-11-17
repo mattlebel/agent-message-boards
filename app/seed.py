@@ -55,17 +55,12 @@ TOPICS = [
         "name": "r/runnyc",
         "priority": 4,
         "description": (
-            "The r/runnyc subreddit, fed by Reddit's digest emails forwarded to the inbox (Reddit closed its API "
-            "and blocks Claude's web search): NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
+            "The r/runnyc subreddit, read through an RSS.app feed (Reddit closed its API and blocks Claude's "
+            "web search): NYC running community chatter. Care about NYRR race talk, 9+1, NYC Marathon "
             "prep and logistics, run clubs, routes, gear, and funny or heated threads."
         ),
-        "sources": [
-            # Claude's web search can't read reddit.com, so this starts off. Forward Reddit's
-            # digest emails for r/runnyc to runnyc@<inbound domain> instead.
-            {"kind": "websearch", "name": "r/runnyc via search (Reddit blocks this)", "active": False, "config": {
-                "query": "New and popular posts in the r/runnyc subreddit (NYC running): races, NYRR, 9+1, marathon, run clubs",
-                "domains": "reddit.com/r/runnyc", "days": 2, "max_results": 8}},
-        ],
+        # Add the RSS.app feed for r/runnyc on the topic page (it's tied to your RSS.app account).
+        "sources": [],
     },
     {
         "slug": "nyc-running",
@@ -304,6 +299,16 @@ def settings_store_set_threads(session: Session) -> None:
         settings_store.set(session, "threads_per_cycle", 4)
 
 
+def _drop_reddit_sources(session: Session) -> str:
+    """The Reddit fetcher is gone; remove Reddit-kind sources and the disabled reddit.com web search."""
+    rows = [src for src in session.scalars(select(Source))
+            if src.kind == "reddit"
+            or (src.kind == "websearch" and not src.active and "reddit.com" in str((src.config or {}).get("domains", "")))]
+    for src in rows:
+        session.delete(src)
+    return f"removed {len(rows)} Reddit sources"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -312,6 +317,7 @@ MIGRATIONS = [
     ("2026-11-13-rescore-videos", _rescore_videos),
     ("2026-11-15-retry-travel-backfill", _retry_travel_backfill),
     ("2026-11-17-cast-of-four", _cast_of_four),
+    ("2026-11-17-drop-reddit-sources", _drop_reddit_sources),
 ]
 
 

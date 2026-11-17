@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from urllib.parse import quote
 
-import httpx
 import markdown as md
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -26,7 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app import (config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
                  suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
-    LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
+    LoginRequired, can_send_link, current_user, email_allowed, make_login_token, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
 )
 from app.db import get_session, init_db, session_scope, utcnow
@@ -140,7 +139,7 @@ def run_bg(fn, *args) -> None:
 def login_page(request: Request, next: str = "/"):
     if current_user(request):
         return back(next)
-    return render(request, "login.html", next=safe_next(next), google=bool(config.GOOGLE_CLIENT_ID),
+    return render(request, "login.html", next=safe_next(next),
                   email_ready=bool(config.RESEND_API_KEY), sent=False)
 
 
@@ -162,7 +161,7 @@ def auth_email(request: Request, email: str = Form(...), next: str = Form("/"),
                          text=f"Sign in to The Board (works once, expires in 15 minutes):\n{link}\n")
         except emailer.EmailError:
             log.exception("couldn't send sign-in link")
-    return render(request, "login.html", next=nxt, google=bool(config.GOOGLE_CLIENT_ID),
+    return render(request, "login.html", next=nxt,
                   email_ready=bool(config.RESEND_API_KEY), sent=True)
 
 
@@ -181,28 +180,6 @@ def auth_email_redeem(request: Request, token: str = Form(""), session: Session 
     request.session.clear()
     request.session["user"] = {"email": email, "name": "", "picture": ""}
     return back(nxt)
-
-
-@app.get("/auth/google")
-async def auth_google(request: Request, next: str = "/"):
-    if not config.GOOGLE_CLIENT_ID:
-        raise HTTPException(500, "Google sign-in is not configured (GOOGLE_CLIENT_ID).")
-    request.session["next"] = safe_next(next)
-    return await oauth.google.authorize_redirect(
-        request, f"{config.BASE_URL}/auth/callback"
-    )
-
-
-@app.get("/auth/callback")
-async def auth_callback(request: Request):
-    token = await oauth.google.authorize_access_token(request)
-    info = token.get("userinfo") or {}
-    email = info.get("email", "")
-    if not info.get("email_verified") or not email_allowed(email):
-        request.session.clear()
-        return HTMLResponse(f"<p>{html_lib.escape(email)} isn't allowed here.</p><p><a href='/login'>Back</a></p>", 403)
-    request.session["user"] = {"email": email, "name": info.get("name", ""), "picture": info.get("picture", "")}
-    return back(request.session.pop("next", "/"))
 
 
 @app.get("/logout")
@@ -922,15 +899,8 @@ async def resend_webhook(request: Request, background: BackgroundTasks):
 @app.get("/youtube", response_class=HTMLResponse)
 def youtube_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
     channels = list(session.scalars(select(YoutubeChannel).order_by(YoutubeChannel.title)))
-    return render(request, "youtube.html", channels=channels, google=bool(config.GOOGLE_CLIENT_ID),
+    return render(request, "youtube.html", channels=channels,
                   unresolved=settings_store.get(session, "youtube_unresolved") or [])
-
-
-@app.get("/youtube/connect")
-async def youtube_connect(request: Request, user=Depends(require_user)):
-    return await oauth.google_yt.authorize_redirect(
-        request, f"{config.BASE_URL}/youtube/callback", prompt="select_account consent"
-    )
 
 
 def _save_channels(session: Session, rows: list[tuple[str, str]], via: str) -> int:
@@ -946,33 +916,6 @@ def _save_channels(session: Session, rows: list[tuple[str, str]], via: str) -> i
             ch.title = title[:300]
     session.commit()
     return added
-
-
-@app.get("/youtube/callback")
-async def youtube_callback(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
-    token = await oauth.google_yt.authorize_access_token(request)
-    rows: list[tuple[str, str]] = []
-    page_token = None
-    async with httpx.AsyncClient(timeout=20) as client:
-        for _ in range(40):
-            params = {"part": "snippet", "mine": "true", "maxResults": 50}
-            if page_token:
-                params["pageToken"] = page_token
-            resp = await client.get("https://www.googleapis.com/youtube/v3/subscriptions", params=params,
-                                    headers={"Authorization": f"Bearer {token['access_token']}"})
-            if resp.status_code != 200:
-                flash(request, f"YouTube API error {resp.status_code}: {resp.text[:200]}")
-                return back("/youtube")
-            data = resp.json()
-            for it in data.get("items", []):
-                sn = it.get("snippet", {})
-                rows.append((sn.get("resourceId", {}).get("channelId", ""), sn.get("title", "")))
-            page_token = data.get("nextPageToken")
-            if not page_token:
-                break
-    added = _save_channels(session, rows, "oauth")
-    flash(request, f"Found {len(rows)} subscriptions, added {added} new channels.")
-    return back("/youtube")
 
 
 @app.post("/youtube/csv")
@@ -1039,7 +982,6 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
         "Resend API key": bool(config.RESEND_API_KEY),
         "Resend webhook secret": bool(config.RESEND_WEBHOOK_SECRET),
         "Email sign-in links (Resend)": bool(config.RESEND_API_KEY),
-        "Google sign-in (optional)": bool(config.GOOGLE_CLIENT_ID),
         "eBay API": bool(config.EBAY_CLIENT_ID),
     }
     return render(request, "settings.html", values=values, models=MODEL_CHOICES, by_purpose=by_purpose,

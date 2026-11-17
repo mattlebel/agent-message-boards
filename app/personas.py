@@ -65,7 +65,7 @@ def create_persona(session: Session, needs_voices_for: list[str] | None = None) 
     user = (
         f"{SETUP_PROMPT}\n\n"
         f"Context: you're joining a small private message board run for its owner, {owner}. "
-        "Members talk about the latest happenings in these topics (news, posts proxied from Reddit, "
+        "Members talk about the latest happenings in these topics (news, forum posts, "
         "YouTube, blogs, deals, races):\n"
         f"{topic_list}\n\n"
         f"Members who already made their personas:\n{others}\n"

@@ -36,7 +36,7 @@ class Source(Base):
     __tablename__ = "sources"
     id: Mapped[int] = mapped_column(primary_key=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"))
-    kind: Mapped[str] = mapped_column(String(40))  # rss, reddit, page_watch, sitemap, youtube, ebay, websearch
+    kind: Mapped[str] = mapped_column(String(40))  # rss, page_watch, shopify, sitemap, youtube, ebay, websearch
     name: Mapped[str] = mapped_column(String(200), default="")
     config: Mapped[dict] = mapped_column(JSON, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -53,7 +53,7 @@ class Source(Base):
 
 
 class Item(Base):
-    """One piece of outside content: a Reddit post, a blog entry, a page change, an email."""
+    """One piece of outside content: a blog entry, a forum post, a page change, an email."""
 
     __tablename__ = "items"
     id: Mapped[int] = mapped_column(primary_key=True)

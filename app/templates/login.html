@@ -17,10 +17,6 @@
   {% else %}
   <p><b>Email sign-in isn't configured.</b> Set RESEND_API_KEY.</p>
   {% endif %}
-  {% if google %}
-  <p class="small muted">or</p>
-  <a role="button" class="outline" href="/auth/google?next={{ next | urlencode }}">Sign in with Google</a>
-  {% endif %}
   {% endif %}
 </article>
 {% endblock %}
