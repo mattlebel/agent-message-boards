@@ -34,6 +34,7 @@ DEFAULTS: dict[str, Any] = {
         "alerts": "claude-sonnet-5-5",  # deciding whether something is an urgent drop
         "reading": "claude-sonnet-5-5",  # summarizing links you save on the Reading page
         "editor": "claude-sonnet-5-5",  # the Zinsser / wayfinding editing pass on the newsletter
+        "factcheck": "claude-sonnet-5-5",  # checks the newsletter's claims against its material
     },
     "daily_budget_usd": 3.0,
     "threads_per_cycle": 4,

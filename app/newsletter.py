@@ -12,10 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.wallet import profile_text as wallet_profile
-from app import config, emailer, images, llm, reading, settings_store, share, style, travel, trips
+from app import clicks, config, emailer, images, llm, reading, settings_store, share, style, travel, trips
 from app.db import utcnow
 from app.discussion import thread_heat
-from app.models import Item, Newsletter, Source, Thread, Topic
+from app.models import Coverage, Item, Newsletter, Source, Thread, Topic
 from app.triage import AlertDecision
 
 log = logging.getLogger(__name__)
@@ -64,6 +64,20 @@ the odd economics metaphor) are welcome when they're doing real work. The writin
 a newsletter that reads like a language model imitating a columnist is the failure mode to avoid."""
 
 
+MORNING_FORMAT = """This is the MORNING edition: a brief that reads in about three minutes. It replaces the
+Structure and Length rules above (voice and everything else still apply).
+- 300-500 words. No essay and no "## " section longer than a short paragraph.
+- Optional one-line opener, then "## Today": anything to act on today or this week, each with the date and
+  link. Leave the section out if there's nothing to act on.
+- "## Overnight": 4-8 bullets, one sentence each with a link, a dry aside where it earns it.
+- "## From your reading list" (one line per link) and "## Upcoming trips" (only trips within 7 days) when
+  the material has them.
+- At most one footnote and one image. Longer explanations wait for the evening edition."""
+
+EVENING_NOTE = ("This is the EVENING edition: the full column described above. YouTube videos and trip "
+                "reports are saved for this edition.")
+
+
 class _Edition(BaseModel):
     subject: str = Field(description="Email subject line: witty, specific, under 80 characters")
     preheader: str = Field(description="Inbox preview text, under 110 characters")
@@ -88,14 +102,19 @@ def thread_url(thread_id: int) -> str:
     return f"{config.BASE_URL}/t/{thread_id}"
 
 
-def _thread_material(t: Thread, max_chars: int = 3500) -> str:
+def _thread_material(t: Thread, max_chars: int = 3500, covered_until: int | None = None) -> str:
     head = f"### Thread: {t.title}\nBoard URL: {thread_url(t.id)}\nSection: {t.topic.name if t.topic else 'General'}"
+    if covered_until:
+        head += ("\nFOLLOW-UP: an earlier edition already covered this thread. Only the posts below are new; "
+                 "mention it only for what they add, in a line or two, and don't re-explain the story.")
     if t.item:
         head += f"\nOriginal source: {t.item.url or '(none)'}\nAbout: {t.item.title}. {t.item.body[:700]}"
         if images.for_item(t.item):
             head += f"\nImage: {images.for_item(t.item)}"
     posts = []
     for p in t.posts:
+        if covered_until and p.id <= covered_until:
+            continue
         who = f"@{p.agent.handle}" if p.agent else "@owner (the reader)"
         reaction = ""
         if p.feedback is not None:
@@ -105,11 +124,40 @@ def _thread_material(t: Thread, max_chars: int = 3500) -> str:
     return head + "\n\n" + body[:max_chars]
 
 
-def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]]:
+def covered_posts(session: Session) -> dict[int, int]:
+    """{thread_id: last post id already covered by a sent newsletter}."""
+    rows = session.execute(
+        select(Coverage.thread_id, Coverage.last_post_id).join(Newsletter, Newsletter.id == Coverage.newsletter_id)
+        .where(Newsletter.sent_at.is_not(None))
+    )
+    out: dict[int, int] = {}
+    for tid, last in rows:
+        out[tid] = max(out.get(tid, 0), last)
+    return out
+
+
+def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item], dict[int, int]]:
+    """Threads and items for the next edition, plus {thread_id: covered-up-to post id} for follow-ups.
+
+    A thread a previous edition covered only comes back when it has new posts, and then only those."""
     threads = list(session.scalars(select(Thread).where(Thread.last_activity_at >= since)))
     # Reading-list threads get their own section, so they aren't counted twice.
     threads = [t for t in threads if not (t.topic and t.topic.slug == reading.TOPIC_SLUG)]
-    threads.sort(key=thread_heat, reverse=True)
+    covered = covered_posts(session)
+    followups: dict[int, int] = {}
+    fresh = []
+    for t in threads:
+        done = covered.get(t.id)
+        if done:
+            if not any(p.id > done for p in t.posts):
+                continue
+            followups[t.id] = done
+        fresh.append(t)
+    threads = fresh
+    boost = clicks.topic_boost(session)
+    # Follow-ups rank below new threads; topics you click rank a little higher.
+    threads.sort(key=lambda t: thread_heat(t) + 2 * boost.get(t.topic_id, 0) - (8 if t.id in followups else 0),
+                 reverse=True)
     # At most N threads per topic (alerts always make it), so one busy topic can't fill the edition.
     cap = int(settings_store.get(session, "max_newsletter_threads_per_topic") or 2)
     per_topic: dict[int, int] = {}
@@ -137,7 +185,8 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
         if per_topic.get(i.topic_id, 0) < cap + 1:  # "Things happened" lines: a little more room
             per_topic[i.topic_id] = per_topic.get(i.topic_id, 0) + 1
             capped.append(i)
-    return threads[:12], capped
+    threads = threads[:12]
+    return threads, capped, {k: v for k, v in followups.items() if k in {t.id for t in threads}}
 
 
 def failing_sources_note(session: Session) -> str:
@@ -191,11 +240,15 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         .order_by(Newsletter.created_at.desc())
     )
     since = last.created_at if last else utcnow() - timedelta(hours=14)
-    threads, leftovers = collect(session, since)
+    threads, leftovers, followups = collect(session, since)
+    morning = edition == "am"
     saved = reading.for_newsletter(session)
-    videos = new_videos(session)
-    reviews = travel.for_newsletter(session)
+    videos = [] if morning else new_videos(session)  # the brief morning edition leaves these for the evening
+    reviews = [] if morning else travel.for_newsletter(session)
     trip_list, trip_items = trips.for_newsletter(session)
+    if morning:
+        trip_list = [t for t in trip_list if t.start_date and t.start_date <= trips.today() + timedelta(days=7)]
+        trip_items = [i for i in trip_items if i.trip_id in {t.id for t in trip_list}]
     review_ids = {r.id for r in reviews}
     leftovers = [i for i in leftovers if i.id not in review_ids]
     if not threads and not leftovers and not saved and not videos and not reviews and not trip_items:
@@ -216,14 +269,18 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     allowed_images = ({images.for_item(t.item) for t in threads if t.item}
                       | {images.for_item(v) for v in videos}
                       | {images.for_item(r) for r in reviews}) - {""}
-    material = "\n\n---\n\n".join(_thread_material(t) for t in threads)
+    material = "\n\n---\n\n".join(_thread_material(t, covered_until=followups.get(t.id)) for t in threads)
+    clicked = clicks.summary(session)
     extras = "\n".join(
         f"- [{i.topic.name}] {i.title} ({i.url}) {i.triage_note}" for i in leftovers
     )
     user = (
         f"Newsletter name: {name}. Edition: {'morning' if edition == 'am' else 'evening'}, "
-        f"{now_et:%A %B %d, %Y}.\nThe reader is {owner}. About them:\n{profile}\n\n"
-        f"BOARD THREADS since the last edition (hottest first):\n\n{material}\n\n"
+        f"{now_et:%A %B %d, %Y}.\n{MORNING_FORMAT if morning else EVENING_NOTE}\n\n"
+        f"The reader is {owner}. About them:\n{profile}\n\n"
+        + (f"Topics the reader has clicked most in the last month (lean toward these when choosing the lead): "
+           f"{clicked}\n\n" if clicked else "")
+        + f"BOARD THREADS since the last edition (hottest first):\n\n{material}\n\n"
         + (f"OTHER ITEMS that came in (good for 'Things happened'):\n{extras}\n\n" if extras else "")
         + (
             "THE READER'S READING LIST (links they saved to read). Give these their own section, "
@@ -278,7 +335,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     ed = style.edit(ed, purpose="newsletter", voice=STYLE_GUIDE, critical=critical, session=session)
     ed = style.polish(ed, purpose="newsletter", role="newsletter", system=system, user=user,
                       critical=critical, long_form=True, max_tokens=12000)
-    ed.markdown = keep_known_images(ed.markdown, allowed_images)
+    ed, problems = fact_check(session, ed, material=user, critical=critical)
+    ed.markdown = keep_known_images(ed.markdown, allowed_images, limit=1 if morning else 4)
     kicker = f"{name} · {now_et:%a %b %-d} · {'Morning' if edition == 'am' else 'Evening'}"
     html = emailer.wrap(ed.subject, emailer.markdown_to_html(ed.markdown), kicker,
                         emailer.footer(failing_sources_note(session)), ed.preheader)
@@ -290,6 +348,10 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
                     thread_ids=[t.id for t in threads])
     session.add(nl)
     session.flush()
+    nl.fact_check_note = (f"fact-check fixed {len(problems)}: " + "; ".join(problems))[:600] if problems else ""
+    for t in threads:
+        if t.posts:
+            session.add(Coverage(newsletter_id=nl.id, thread_id=t.id, last_post_id=max(p.id for p in t.posts)))
     for r in saved:
         r.newsletter_id = nl.id
     for v in videos:
@@ -302,12 +364,55 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     return nl
 
 
+class _Check(llm.Lenient):
+    problems: list[str] = Field(default_factory=list, description=(
+        "Each factual claim in the draft that the material doesn't support or contradicts, with what's wrong. "
+        "Empty if every claim checks out."))
+    subject: str = Field(default="", description="Corrected subject line, only if it had a problem")
+    markdown: str = Field(default="", description="The full corrected newsletter, only if there were problems")
+
+
+FACT_CHECK = """You fact-check a newsletter against the material it was written from.
+Check every factual claim: names, numbers, prices, dates, times, places, who said what, what a link leads to,
+what's available and until when. Opinions, jokes, metaphors and obvious comic exaggeration are fine.
+A claim is a problem when the material doesn't support it or contradicts it.
+If there are problems, return the whole newsletter with only those claims fixed or removed. Change nothing
+else: keep the voice, every link, image and footnote. If there are none, return an empty problems list and
+leave subject and markdown empty."""
+
+
+def fact_check(session: Session, ed: _Edition, *, material: str, critical: bool = True) -> tuple[_Edition, list[str]]:
+    """Compare the draft's claims with the material; fix unsupported ones. Returns (edition, problems)."""
+    try:
+        res = llm.generate(
+            purpose="newsletter_factcheck", role="factcheck", system=FACT_CHECK,
+            user=f"THE MATERIAL:\n\n{material}\n\n=====\n\nTHE DRAFT:\nSubject: {ed.subject}\n\n{ed.markdown}",
+            max_tokens=12000, effort="medium", schema=_Check, critical=critical, fake=lambda: _Check(),
+        )
+    except (llm.BudgetExceeded, llm.LlmError) as e:
+        log.warning("fact-check skipped: %s", e)
+        return ed, []
+    check: _Check = res.parsed
+    problems = [p for p in check.problems if p.strip()]
+    if not problems:
+        return ed, []
+    log.info("fact-check found %d problems: %s", len(problems), problems)
+    fixed = ed.model_copy()
+    if check.markdown.strip() and len(check.markdown) > len(ed.markdown) * 0.6:  # not a truncated rewrite
+        fixed.markdown = check.markdown
+    if check.subject.strip():
+        fixed.subject = check.subject.strip()[:150]
+    return fixed, problems
+
+
 def send_newsletter(session: Session, nl: Newsletter, to: list[str] | None = None,
                     scheduled_at: datetime | None = None) -> None:
     # Board links get a share key that works for 24 hours after delivery, without signing in.
     # The stored copy keeps plain links (the admin view is behind sign-in anyway).
     html = share.tokenize_links(nl.html, scheduled_at)
     text = share.tokenize_links(nl.markdown, scheduled_at)
+    if nl.kind == "daily":
+        html = clicks.wrap_links(html, nl.id)  # clicks steer which topics get picked
     try:
         nl.resend_id = emailer.send(
             to or emailer.recipients(session), nl.subject, html, text,

@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import (config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
+from app import (clicks, config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
                  suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, peek_login_token,
@@ -227,6 +227,21 @@ def board(request: Request, topic: str = "", page: int = 1, user=Depends(require
                   page=page, has_more=has_more, stats=stats)
 
 
+@app.get("/r/{key}")
+def click_redirect(key: str, session: Session = Depends(get_session)):
+    """Newsletter links pass through here: record the click, then go to the real URL."""
+    found = clicks.read_key(key)
+    if found is None:
+        raise HTTPException(404)
+    url, newsletter_id = found
+    try:
+        clicks.record_email_click(session, url, newsletter_id)
+    except Exception:
+        log.exception("couldn't record click")
+        session.rollback()
+    return RedirectResponse(url, status_code=302)
+
+
 @app.get("/t/{thread_id}", response_class=HTMLResponse)
 def thread_page(request: Request, thread_id: int, k: str = "", session: Session = Depends(get_session)):
     user = current_user(request)
@@ -240,11 +255,13 @@ def thread_page(request: Request, thread_id: int, k: str = "", session: Session 
         thread = session.get(Thread, thread_id)
         if thread is None:
             raise HTTPException(404)
+        clicks.record_open(session, thread)
         return render(request, "thread.html", thread=thread, nav="", readonly=True,
                       share_expires=expires.replace(tzinfo=None))
     thread = session.get(Thread, thread_id)
     if thread is None:
         raise HTTPException(404)
+    clicks.record_open(session, thread)
     return render(request, "thread.html", thread=thread, nav="board", readonly=False)
 
 

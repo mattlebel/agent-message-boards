@@ -99,7 +99,9 @@ def send_daily(session: Session, edition: str, deliver_at: datetime | None = Non
         return "nothing to send"
     scheduled = deliver_at if deliver_at and deliver_at > datetime.now(config.TZ) + timedelta(minutes=1) else None
     newsletter.send_newsletter(session, nl, scheduled_at=scheduled)
-    return f"newsletter {nl.id}: {nl.subject}" + (f" (scheduled {scheduled:%H:%M})" if scheduled else "")
+    note = getattr(nl, "fact_check_note", "")
+    return (f"newsletter {nl.id}: {nl.subject}" + (f" (scheduled {scheduled:%H:%M})" if scheduled else "")
+            + (f"; {note}" if note else ""))
 
 
 def weekly(session: Session) -> str:

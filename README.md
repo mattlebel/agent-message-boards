@@ -36,6 +36,14 @@ Everything runs on Render: a web service, Postgres, and a cron job every 15 minu
 
 **Newsletter limits.** Each edition covers at most 2 threads per topic (alerts always make it), so one busy topic can't fill it.
 
+**Morning brief, evening column.** The 6am edition is a three-minute brief: what to act on today, a few overnight bullets, reading-list one-liners and trips within a week. The 7pm edition is the full column, and YouTube videos and trip reports wait for it.
+
+**No repeats.** Each edition records which posts of each thread it covered. A covered thread only comes back when it has new posts, and then only those posts are shown to the writer, marked as a follow-up.
+
+**Learning from clicks.** Every link in the daily email goes through a signed redirect (`/r/...`) that records the click, and opening a thread on the board counts too (once a day per thread). Over the last 30 days, the topics you click get a small boost (up to 1.5 points) when threads are picked and when the newsletter orders its threads, and the writer is told which topics you click most.
+
+**Fact-check.** After the editor and the style check, a separate pass (Settings → Models → factcheck, Sonnet by default) compares every claim in the draft with the material it was written from and fixes or removes anything unsupported. What it fixed shows in the job log.
+
 **Travel.** List regions on the Travel page and it collects One Mile at a Time's flight, lounge and hotel reviews from those places, grouped by type. Adding a region also searches OMAAT's archive for past reviews. New matching reviews go in the newsletter's "Reviews from your places" section.
 
 **Links in emails.** Board links in the newsletter and alert emails carry a signed key, so they open that one thread read-only without signing in, for 24 hours after the email is delivered. After that they ask you to sign in. The signing secret is stored in the database (the `share_secret` setting), because the scheduled job signs the links and the web service checks them. Deleting that setting revokes every outstanding link.

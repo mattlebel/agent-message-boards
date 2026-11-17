@@ -125,7 +125,22 @@ def test_email_share_links(monkeypatch):
         s.flush()
         send_newsletter(s, nl)
         assert "?k=" not in nl.html  # stored copy keeps plain links
-    assert "?k=" in captured[0]
+        nl_id = nl.id
+    # Daily links go through the click redirect, which wraps the share-keyed thread link.
+    import re
+
+    from app import clicks
+    from app.models import Click
+
+    key = re.search(r'/r/([^"]+)"', captured[0]).group(1)
+    target, newsletter_id = clicks.read_key(key)
+    assert f"/t/{a_id}?k=" in target and newsletter_id == nl_id
+    r = client.get(f"/r/{key}", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"] == target
+    assert client.get("/r/not-a-real-key", follow_redirects=False).status_code == 404
+    with session_scope() as s:
+        click = s.scalar(select(Click).where(Click.newsletter_id == nl_id))
+        assert click is not None and click.thread_id == a_id
     with session_scope() as s:  # leave the shared test DB as we found it
         for t in s.scalars(select(Thread).where(Thread.id.in_([a_id, b_id]))):
             s.delete(t)

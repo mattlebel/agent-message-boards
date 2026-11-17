@@ -305,3 +305,27 @@ class TripItem(Base):
     newsletter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Coverage(Base):
+    """Which posts of a thread a newsletter covered, so the next edition only follows up on new ones."""
+
+    __tablename__ = "coverage"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    newsletter_id: Mapped[int] = mapped_column(Integer, index=True)
+    thread_id: Mapped[int] = mapped_column(Integer, index=True)
+    last_post_id: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Click(Base):
+    """A click on a newsletter link, or a thread opened on the board. Steers what gets picked."""
+
+    __tablename__ = "clicks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), default="email")  # email, open
+    url: Mapped[str] = mapped_column(Text, default="")
+    newsletter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    topic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

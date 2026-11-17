@@ -166,8 +166,12 @@ def pick_for_discussion(session: Session, n: int) -> list[Item]:
         )
     )
     candidates = [i for i in candidates if i.score >= threshold_for(session, i.topic)]
+    from app.clicks import topic_boost
+
+    boost = topic_boost(session)  # topics you click in emails and open on the board rank a bit higher
+
     def rank(i: Item) -> float:
-        return (i.score or 0) + (i.topic.priority - 3) * 0.6
+        return (i.score or 0) + (i.topic.priority - 3) * 0.6 + boost.get(i.topic_id, 0)
 
     by_topic: dict[int, list[Item]] = defaultdict(list)
     for it in sorted(candidates, key=rank, reverse=True):
