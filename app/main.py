@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import (config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
-                 suggestions, travel, triage, wallet, youtube)
+                 suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, oauth, peek_login_token,
     redeem_login_token, require_user, require_user_api, safe_next,
@@ -33,7 +33,7 @@ from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
     Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, ReadingItem, Source, Thread, Topic,
-    WalletCard,
+    Trip, TripItem, WalletCard,
     TopicSuggestion, YoutubeChannel,
 )
 from app.seed import run_migrations, seed
@@ -693,6 +693,121 @@ def wallet_delete(card_id: int, user=Depends(require_user), session: Session = D
         session.delete(card)
         session.commit()
     return back("/wallet")
+
+
+# --- trips (planned travel) ------------------------------------------------------------------
+
+
+def _date(value: str):
+    from datetime import datetime as _dt
+
+    try:
+        return _dt.strptime(value.strip(), "%Y-%m-%d") if value and value.strip() else None
+    except ValueError:
+        return None
+
+
+@app.get("/trips", response_class=HTMLResponse)
+def trips_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    all_trips = list(session.scalars(select(Trip).order_by(Trip.start_date)))
+    upcoming = trips.upcoming(session)
+    past = [t for t in all_trips if t not in upcoming]
+    return render(request, "trips.html", upcoming=upcoming, past=past[::-1][:10], unsorted=trips.unsorted(session),
+                  countdown=trips.countdown, when_label=trips.when_label, kind_labels=trips.KIND_LABELS)
+
+
+def _research_bg(session: Session, trip_id: int) -> None:
+    trip = session.get(Trip, trip_id)
+    if trip and trips.research_due(trip):
+        trips.research(session, trip)
+
+
+@app.post("/trips")
+def trips_add(request: Request, background: BackgroundTasks, name: str = Form(...), destination: str = Form(""),
+              start_date: str = Form(""), end_date: str = Form(""), flights: str = Form(""), notes: str = Form(""),
+              user=Depends(require_user), session: Session = Depends(get_session)):
+    trip = Trip(name=name.strip()[:200], destination=destination.strip()[:300], start_date=_date(start_date),
+                end_date=_date(end_date) or _date(start_date), flights=flights.strip(), notes=notes.strip())
+    session.add(trip)
+    session.commit()
+    background.add_task(run_bg, _research_bg, trip.id)
+    flash(request, f"Added {trip.name}. Looking for ideas and events now; refresh in a minute or two.")
+    return back(f"/trips/{trip.id}")
+
+
+@app.get("/trips/{trip_id}", response_class=HTMLResponse)
+def trip_page(request: Request, trip_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    if trip is None:
+        raise HTTPException(404)
+    reviews = []
+    if trip.destination:
+        wanted = [trip.destination] + [p.strip() for p in trip.destination.split(",") if p.strip()]
+        reviews = [i for i in session.scalars(select(Item)) if travel.is_omaat(i) and travel.matched_regions(i, wanted)][:12]
+    return render(request, "trip.html", trip=trip, items=trips.items_for(session, trip), reviews=reviews,
+                  countdown=trips.countdown, when_label=trips.when_label, kind_labels=trips.KIND_LABELS,
+                  nav="trips")
+
+
+@app.post("/trips/{trip_id}")
+def trip_update(request: Request, trip_id: int, name: str = Form(...), destination: str = Form(""),
+                start_date: str = Form(""), end_date: str = Form(""), flights: str = Form(""), notes: str = Form(""),
+                user=Depends(require_user), session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    trip.name, trip.destination = name.strip()[:200], destination.strip()[:300]
+    trip.start_date, trip.end_date = _date(start_date), _date(end_date) or _date(start_date)
+    trip.flights, trip.notes = flights.strip(), notes.strip()
+    session.commit()
+    flash(request, "Saved.")
+    return back(f"/trips/{trip_id}")
+
+
+@app.post("/trips/{trip_id}/research")
+def trip_research_now(request: Request, background: BackgroundTasks, trip_id: int, user=Depends(require_user),
+                      session: Session = Depends(get_session)):
+    background.add_task(run_bg, lambda s: trips.research(s, s.get(Trip, trip_id)))
+    flash(request, "Looking for ideas and events; refresh in a minute or two.")
+    return back(f"/trips/{trip_id}")
+
+
+@app.post("/trips/{trip_id}/note")
+def trip_note(trip_id: int, title: str = Form(...), url: str = Form(""), user=Depends(require_user),
+              session: Session = Depends(get_session)):
+    session.add(TripItem(trip_id=trip_id, kind="note", title=title.strip()[:500],
+                         url=url.strip() if url.strip().startswith("http") else "", source="manual"))
+    session.commit()
+    return back(f"/trips/{trip_id}")
+
+
+@app.post("/trips/{trip_id}/delete")
+def trip_delete(request: Request, trip_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    trip = session.get(Trip, trip_id)
+    if trip:
+        for it in session.scalars(select(TripItem).where(TripItem.trip_id == trip_id)):
+            session.delete(it)
+        session.delete(trip)
+        session.commit()
+        flash(request, f"Deleted {trip.name}.")
+    return back("/trips")
+
+
+@app.post("/trip-items/{item_id}/assign")
+def trip_item_assign(item_id: int, trip_id: int = Form(...), user=Depends(require_user),
+                     session: Session = Depends(get_session)):
+    item = session.get(TripItem, item_id)
+    if item and session.get(Trip, trip_id):
+        item.trip_id = trip_id
+        session.commit()
+    return back("/trips")
+
+
+@app.post("/trip-items/{item_id}/dismiss")
+def trip_item_dismiss(request: Request, item_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    item = session.get(TripItem, item_id)
+    if item:
+        item.dismissed = True
+        session.commit()
+    return back(request.headers.get("referer") or "/trips")
 
 
 # --- travel (trip reports by region) --------------------------------------------------------

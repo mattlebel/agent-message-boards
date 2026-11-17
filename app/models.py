@@ -272,3 +272,36 @@ class WalletCard(Base):
     counts_524: Mapped[bool] = mapped_column(Boolean, default=True)
     closed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Trip(Base):
+    """A planned trip: dates and destination; ideas, events and forwarded confirmations hang off it."""
+
+    __tablename__ = "trips"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    destination: Mapped[str] = mapped_column(String(300), default="")
+    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    flights: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    last_researched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TripItem(Base):
+    """Something attached to a trip: a booking from a forwarded email, an idea, an event, a note."""
+
+    __tablename__ = "trip_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trip_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # None = unsorted
+    kind: Mapped[str] = mapped_column(String(20), default="note")  # flight, hotel, reservation, event, idea, note
+    title: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[str] = mapped_column(Text, default="")
+    url: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="manual")  # email, research, manual
+    inbound_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    newsletter_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

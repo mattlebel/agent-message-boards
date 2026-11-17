@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ trip.name }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/trips">Trips</a> › {{ trip.name }}</p>
+<div class="btn-row" style="justify-content: space-between;">
+  <h2 style="margin:0;">{{ trip.name }}</h2>
+  <span class="pill">{{ countdown(trip) }}</span>
+</div>
+<p class="muted">{{ trip.destination }} · {{ when_label(trip.start_date) }}{% if trip.end_date and trip.end_date != trip.start_date %} to {{ when_label(trip.end_date) }}{% endif %}</p>
+
+<h4>Logistics</h4>
+{% if trip.flights %}<p class="small"><b>Flights:</b> {{ trip.flights }}</p>{% endif %}
+<table class="compact">
+  <tbody>
+  {% for b in items.bookings %}
+  <tr><td style="white-space:nowrap" class="small">{{ when_label(b.starts_at) }}</td>
+    <td><b>{{ kind_labels[b.kind] }}:</b> {% if b.url %}<a href="{{ b.url }}" target="_blank" rel="noopener">{{ b.title }}</a>{% else %}{{ b.title }}{% endif %}
+      {% if b.details %}<div class="small muted">{{ b.details }}</div>{% endif %}</td>
+    <td><form class="inline-form" method="post" action="/trip-items/{{ b.id }}/dismiss"><button class="secondary outline" type="submit">Remove</button></form></td></tr>
+  {% else %}
+  <tr><td class="muted small">No bookings yet. Forward confirmations to travel-planning@{{ config.INBOUND_DOMAIN }}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="btn-row" style="justify-content: space-between;">
+  <h4 style="margin:0;">Events during the trip</h4>
+  <form method="post" action="/trips/{{ trip.id }}/research"><button class="outline" type="submit">Find more ideas now</button></form>
+</div>
+<ul class="threads">
+  {% for e in items.events %}
+  <li><div style="flex:1"><b>{{ when_label(e.starts_at) }}</b> · {% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}
+    {% if e.details %}<div class="meta">{{ e.details }}</div>{% endif %}</div>
+    <form class="inline-form" method="post" action="/trip-items/{{ e.id }}/dismiss"><button class="secondary outline" type="submit">Not for me</button></form></li>
+  {% else %}<li class="muted small">Nothing yet. The board looks every few days, and daily in the final week.</li>{% endfor %}
+</ul>
+
+<h4>Ideas</h4>
+<ul class="threads">
+  {% for e in items.ideas %}
+  <li><div style="flex:1">{% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}
+    {% if e.details %}<div class="meta">{{ e.details }}</div>{% endif %}</div>
+    <form class="inline-form" method="post" action="/trip-items/{{ e.id }}/dismiss"><button class="secondary outline" type="submit">Not for me</button></form></li>
+  {% else %}<li class="muted small">Nothing yet.</li>{% endfor %}
+</ul>
+
+{% if reviews %}
+<h4>One Mile at a Time reviews for {{ trip.destination }}</h4>
+<ul class="small">{% for r in reviews %}<li><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }}</a></li>{% endfor %}</ul>
+{% endif %}
+
+<h4>Notes</h4>
+<ul class="small">{% for n in items.notes %}<li>{% if n.url %}<a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}{% if n.details %} <span class="muted">{{ n.details }}</span>{% endif %}</li>{% endfor %}</ul>
+<form method="post" action="/trips/{{ trip.id }}/note" class="grid">
+  <input name="title" placeholder="Add a note" required>
+  <input name="url" placeholder="Link (optional)">
+  <button type="submit" class="outline">Add</button>
+</form>
+
+<details>
+  <summary role="button" class="secondary outline">Edit trip</summary>
+  <form method="post" action="/trips/{{ trip.id }}">
+    <div class="grid">
+      <label>Name <input name="name" value="{{ trip.name }}" required></label>
+      <label>Destination <input name="destination" value="{{ trip.destination }}"></label>
+    </div>
+    <div class="grid">
+      <label>Start <input type="date" name="start_date" value="{{ trip.start_date.strftime('%Y-%m-%d') if trip.start_date }}"></label>
+      <label>End <input type="date" name="end_date" value="{{ trip.end_date.strftime('%Y-%m-%d') if trip.end_date }}"></label>
+    </div>
+    <label>Flights <textarea name="flights" rows="2">{{ trip.flights }}</textarea></label>
+    <label>Notes for the planner <textarea name="notes" rows="2">{{ trip.notes }}</textarea></label>
+    <button type="submit">Save</button>
+  </form>
+  <form method="post" action="/trips/{{ trip.id }}/delete" onsubmit="return confirm('Delete this trip and everything on it?')">
+    <button class="secondary outline" type="submit">Delete trip</button>
+  </form>
+</details>
+{% endblock %}

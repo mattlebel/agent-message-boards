@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.wallet import profile_text as wallet_profile
-from app import config, emailer, images, llm, reading, settings_store, share, style, travel
+from app import config, emailer, images, llm, reading, settings_store, share, style, travel, trips
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Item, Newsletter, Source, Thread, Topic
@@ -46,9 +46,10 @@ Structure (markdown):
 3. "## Things happened" - a bulleted list of 6-12 short items, each one sentence with a link, often with a
    dry comment after it.
 4. If the reader saved links, a "## From your reading list" section (see the material).
-5. If there are new reviews from the reader's places, a "## Reviews from your places" list (see the material).
-6. If there are new subscription videos, a "## New on YouTube" list (see the material).
-7. If there are dated actions, end with "## Dates" - a short list of what to do and when.
+5. If the reader has upcoming trips, a "## Upcoming trips" section (see the material).
+6. If there are new reviews from the reader's places, a "## Reviews from your places" list (see the material).
+7. If there are new subscription videos, a "## New on YouTube" list (see the material).
+8. If there are dated actions, end with "## Dates" - a short list of what to do and when.
 
 Links: link to original sources with their URLs, and to board threads with the board URLs given. Never invent URLs.
 Images: when an item in the material has an "Image:" URL, you may show it once, with markdown
@@ -178,9 +179,10 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     saved = reading.for_newsletter(session)
     videos = new_videos(session)
     reviews = travel.for_newsletter(session)
+    trip_list, trip_items = trips.for_newsletter(session)
     review_ids = {r.id for r in reviews}
     leftovers = [i for i in leftovers if i.id not in review_ids]
-    if not threads and not leftovers and not saved and not videos and not reviews:
+    if not threads and not leftovers and not saved and not videos and not reviews and not trip_items:
         log.info("nothing new for the newsletter")
         return None
     name = settings_store.get(session, "newsletter_name")
@@ -214,6 +216,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
             "there's a thread (link it).\n\n" + reading.newsletter_material(session, saved, thread_url,
                                                                             allowed_images) + "\n\n"
             if saved else ""
+        )
+        + (
+            "THE READER'S UPCOMING TRIPS. Give them a section, '## Upcoming trips', placed by importance (right "
+            "after the lead if a trip is days away): for each trip the countdown, the best new ideas and events "
+            "with links and dates, and, when it's within a week, the flight and booking details as a quick list.\n"
+            + trips.newsletter_material(session, trip_list, trip_items) + "\n\n"
+            if trip_list else ""
         )
         + (
             "NEW ONE MILE AT A TIME REVIEWS FROM PLACES THE READER IS WATCHING. Give them a section, "
@@ -271,6 +280,8 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         v.extra = {**(v.extra or {}), "newsletter_id": nl.id}
     for r in reviews:
         r.extra = {**(r.extra or {}), "newsletter_reviews": nl.id}
+    for t in trip_items:
+        t.newsletter_id = nl.id
     session.commit()
     return nl
 

@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import (config, discussion, inbound, ingest, llm, newsletter, personas, settings_store, suggestions,
-                 travel, triage, wallet)
+                 travel, triage, trips, wallet)
 from app.db import init_db, job_lock, session_scope, utcnow
 from app.models import Agent, JobRun
 
@@ -81,6 +81,7 @@ def cycle(session: Session) -> str:
     filtered = wallet.check_offers(session)  # business and ineligible card offers never reach the board
     travel.classify_new(session)
     travel.backfill_new_regions(session)  # regions whose archive search hasn't worked yet
+    trips.research_due_trips(session)  # ideas and events for upcoming trips
     n = int(settings_store.get(session, "threads_per_cycle"))
     picked = triage.pick_for_discussion(session, n)
     threads = discussion.discuss(session, picked)

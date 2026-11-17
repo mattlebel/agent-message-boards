@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Trips{% endblock %}
+{% block content %}
+<h2>Trips</h2>
+<p class="muted">Add a trip and the board looks for events and ideas there. Forward confirmations and anything
+  trip-related to <b>travel-planning@{{ config.INBOUND_DOMAIN }}</b> and it's filed into the right trip.
+  Trips starting within 45 days show up in the newsletter.</p>
+
+{% for t in upcoming %}
+<article>
+  <header class="btn-row" style="justify-content: space-between;">
+    <div><a href="/trips/{{ t.id }}"><b>{{ t.name }}</b></a> <span class="muted">{{ t.destination }}</span></div>
+    <span class="pill {{ 'alert' if countdown(t) in ('today', 'tomorrow', 'under way') else '' }}">{{ countdown(t) }}</span>
+  </header>
+  <p class="small muted" style="margin:0;">{{ when_label(t.start_date) }}{% if t.end_date and t.end_date != t.start_date %} to {{ when_label(t.end_date) }}{% endif %}</p>
+</article>
+{% else %}
+<p class="muted">No upcoming trips yet.</p>
+{% endfor %}
+
+<details {% if not upcoming %}open{% endif %}>
+  <summary role="button" class="outline">Add a trip</summary>
+  <form method="post" action="/trips">
+    <div class="grid">
+      <label>Name <input name="name" required placeholder="Japan in March"></label>
+      <label>Destination <input name="destination" placeholder="Tokyo, Kyoto"></label>
+    </div>
+    <div class="grid">
+      <label>Start <input type="date" name="start_date" required></label>
+      <label>End <input type="date" name="end_date"></label>
+    </div>
+    <label>Flights (optional) <textarea name="flights" rows="2" placeholder="JL7 BOS-NRT Mar 3 10:55; JL8 NRT-BOS Mar 12"></textarea></label>
+    <label>Notes for the planner (optional) <textarea name="notes" rows="2" placeholder="Want a long run along the Kamo River, sushi counter one night, anything Inciardi-adjacent"></textarea></label>
+    <button type="submit">Add trip</button>
+  </form>
+</details>
+
+{% if unsorted %}
+<h4>Unsorted</h4>
+<p class="small muted">Forwarded items that didn't match a trip.</p>
+<table class="compact">
+  <tbody>
+  {% for i in unsorted %}
+  <tr>
+    <td><b>{{ kind_labels.get(i.kind, 'Note') }}:</b> {{ i.title }}{% if i.starts_at %} <span class="muted small">· {{ when_label(i.starts_at) }}</span>{% endif %}
+      {% if i.details %}<div class="small muted">{{ i.details }}</div>{% endif %}</td>
+    <td class="btn-row">
+      {% if upcoming %}
+      <form class="inline-form" method="post" action="/trip-items/{{ i.id }}/assign">
+        <select name="trip_id" style="margin:0;padding:.2rem .4rem;font-size:.8rem;width:auto;">{% for t in upcoming %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
+        <button type="submit">Add to trip</button></form>
+      {% endif %}
+      <form class="inline-form" method="post" action="/trip-items/{{ i.id }}/dismiss"><button class="secondary outline" type="submit">Dismiss</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if past %}
+<h4>Past trips</h4>
+<ul class="small">{% for t in past %}<li><a href="/trips/{{ t.id }}">{{ t.name }}</a> <span class="muted">{{ when_label(t.start_date) }}</span></li>{% endfor %}</ul>
+{% endif %}
+{% endblock %}

@@ -61,6 +61,12 @@ def process_email(session: Session, row: InboundEmail, email: dict) -> None:
     row.text = text[:20000]
 
     addresses = list(email.get("to") or []) + list(email.get("received_for") or []) + list(row.to_addrs or [])
+    from app import trips
+
+    if trips.is_trip_address(addresses):  # travel-planning@ / trips@: file into a planned trip
+        row.items_created = trips.process_email(session, row, text)
+        row.status = "processed"
+        return
     topic = _topic_from_address(session, addresses)
     topics = list(session.scalars(select(Topic).where(Topic.active)))
     if topic is None and topics:

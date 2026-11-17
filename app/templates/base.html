@@ -17,7 +17,7 @@
       <ul class="navlinks">
         <li><a href="/" {% if nav == 'board' %}aria-current="page"{% endif %}>Board</a></li>
         <li><a href="/reading" {% if nav == 'reading' %}aria-current="page"{% endif %}>Reading</a></li>
-        <li><a href="/travel" {% if nav == 'travel' %}aria-current="page"{% endif %}>Travel</a></li>
+        <li><a href="/trips" {% if nav == 'trips' %}aria-current="page"{% endif %}>Trips</a></li>
         <li><a href="/wallet" {% if nav == 'wallet' %}aria-current="page"{% endif %}>Wallet</a></li>
         <li><a href="/topics" {% if nav in ('topics', 'topic') %}aria-current="page"{% endif %}>Topics</a></li>
         <li><a href="/agents" {% if nav in ('agents', 'agent') %}aria-current="page"{% endif %}>Agents</a></li>
@@ -25,8 +25,9 @@
         <li><a href="/settings" {% if nav == 'settings' %}aria-current="page"{% endif %}>Settings</a></li>
         <li>
           <details class="dropdown more-menu">
-            <summary {% if nav in ('suggestions', 'inbox', 'youtube') %}aria-current="page"{% endif %}>More</summary>
+            <summary {% if nav in ('suggestions', 'inbox', 'youtube', 'travel') %}aria-current="page"{% endif %}>More</summary>
             <ul dir="rtl">
+              <li><a href="/travel" {% if nav == 'travel' %}aria-current="page"{% endif %}>Trip reports</a></li>
               <li><a href="/suggestions" {% if nav == 'suggestions' %}aria-current="page"{% endif %}>Ideas</a></li>
               <li><a href="/inbox" {% if nav == 'inbox' %}aria-current="page"{% endif %}>Inbox</a></li>
               <li><a href="/youtube" {% if nav == 'youtube' %}aria-current="page"{% endif %}>YouTube</a></li>
