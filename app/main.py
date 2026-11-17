@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import markdown as md
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import (clicks, config, races, strava, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
+from app import (clicks, config, ops, races, strava, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
                  suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, peek_login_token,
@@ -1099,6 +1099,15 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
                    "summary": settings_store.get(session, "strava_summary") or ""}
     return render(request, "settings.html", values=values, models=MODEL_CHOICES, by_purpose=by_purpose,
                   by_day=by_day, runs=runs, env=env, spent=llm.spent_today(), strava=strava_info)
+
+
+@app.get("/settings/backup.json")
+def settings_backup(user=Depends(require_user), session: Session = Depends(get_session)):
+    """Download everything set up by hand, as JSON (no secrets or tokens)."""
+    data = json.dumps(ops.backup(session), indent=2, default=str)
+    name = f"board-backup-{utcnow():%Y-%m-%d}.json"
+    return Response(data, media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @app.get("/strava/connect")

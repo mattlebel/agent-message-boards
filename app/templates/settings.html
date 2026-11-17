@@ -109,6 +109,9 @@
 </div>
 {% endif %}
 
+<h4>Backups</h4>
+<p class="small">Render backs up the database itself (see the README). <a href="/settings/backup.json">Download a backup of your setup</a>: topics, sources, personas, settings, wallet, trips, races, reading list and YouTube channels as JSON, without secrets or tokens.</p>
+
 <h4>Connections</h4>
 <ul class="small">
   {% for name, ok in env.items() %}<li>{{ '✅' if ok else '⬜️' }} {{ name }}</li>{% endfor %}

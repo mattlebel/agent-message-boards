@@ -64,6 +64,7 @@ DEFAULTS: dict[str, Any] = {
     "share_secret": "",  # signs the 24-hour email links; created automatically
     "strava": {},  # OAuth tokens after "Connect Strava" (never shown or exported)
     "strava_summary": "",  # recent training, refreshed each cycle
+    "ops_alerts": {},  # {job: last time a failure email went out}
 }
 
 

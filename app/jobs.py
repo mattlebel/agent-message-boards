@@ -156,7 +156,20 @@ def run_job(job: str, fn, *args, key: str | None = None) -> str | None:
         run = s.get(JobRun, run_id)
         run.status, run.detail, run.finished_at = status, detail[:4000], utcnow()
     log.info("job %s %s: %s", job, status, detail)
+    if status == "error":
+        _notify(job)
     return detail
+
+
+def _notify(job: str) -> None:
+    """Email the owner when a job has failed twice in a row (at most once per 12 hours per job)."""
+    from app import ops
+
+    try:
+        with session_scope() as s:
+            ops.notify_if_failing(s, job)
+    except Exception:
+        log.exception("failure notification failed")
 
 
 def _at(day: datetime, hhmm: str) -> datetime:
@@ -209,6 +222,8 @@ def run_hot_quietly() -> None:
         detail, status = f"{type(e).__name__}: {e}", "error"
     with session_scope() as s:
         s.add(JobRun(job="hot", status=status, detail=detail[:4000], finished_at=utcnow()))
+    if status == "error":
+        _notify("hot")
 
 
 def run_named(name: str, *args) -> str | None:
