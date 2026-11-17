@@ -124,8 +124,8 @@ def coverage_gaps(session: Session, min_agents: int = 2) -> list[str]:
     return [t.slug for t in topics if sum(t.slug in (a.interests or []) for a in agents) < min_agents]
 
 
-def bootstrap(session: Session, count: int = 8, max_total: int = 11) -> list[Agent]:
-    """Fill the cast up to `count` active members, then top up any topic with fewer than two.
+def bootstrap(session: Session, count: int = 4, max_total: int = 4) -> list[Agent]:
+    """Fill the cast up to `count` active members (then, if max_total allows, top up thin topics).
 
     A refused or failed persona is skipped (with a few extra attempts), not fatal.
     """

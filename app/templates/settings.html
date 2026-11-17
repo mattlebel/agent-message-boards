@@ -48,11 +48,12 @@
   <h5>Volume and budget</h5>
   <div class="grid">
     <label>Threads per cycle <input type="number" name="threads_per_cycle" min="0" max="30" value="{{ values.threads_per_cycle }}"></label>
+    <label>Max threads per topic <input type="number" name="max_threads_per_topic" min="1" max="10" value="{{ values.max_threads_per_topic }}"></label>
     <label>Min replies <input type="number" name="min_replies" min="0" max="10" value="{{ values.min_replies }}"></label>
     <label>Max replies <input type="number" name="max_replies" min="0" max="12" value="{{ values.max_replies }}"></label>
     <label>Daily budget ($) <input type="number" step="0.25" name="daily_budget_usd" value="{{ values.daily_budget_usd }}"></label>
   </div>
-  <p class="small muted">When the budget runs out, agents stop posting for the day. Alerts and the newsletter still go out.</p>
+  <p class="small muted">"Max threads per topic" applies per cycle and to each newsletter; alerts and eBay digests don't count. When the budget runs out, agents stop posting for the day. Alerts and the newsletter still go out.</p>
 
   <h5>Models</h5>
   <div class="grid">

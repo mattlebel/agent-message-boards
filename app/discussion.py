@@ -280,6 +280,12 @@ def add_reply(session: Session, thread: Thread, agent: Optional[Agent] = None, c
     return post
 
 
+def is_rich(item: Item) -> bool:
+    """Enough material that a second person reading it will likely find something the opener left out."""
+    extra = item.extra or {}
+    return extra.get("kind") == "ebay_digest" or len(item.body or "") >= 1500 or bool(extra.get("alert"))
+
+
 def discuss(session: Session, items: list[Item]) -> list[Thread]:
     lo = int(settings_store.get(session, "min_replies"))
     hi = int(settings_store.get(session, "max_replies"))
@@ -287,8 +293,13 @@ def discuss(session: Session, items: list[Item]) -> list[Thread]:
     for item in items:
         try:
             thread = start_thread(session, item)
-            for _ in range(random.randint(lo, max(lo, hi))):
-                if add_reply(session, thread) is None:
+            rich = is_rich(item)
+            for n in range(max(random.randint(lo, max(lo, hi)), 1 if rich else 0)):
+                # Rich material (a long article, a digest) gets one reply; after that, only if earned.
+                first_rich = rich and n == 0
+                nudge = ("There's more in the material than the opening post covers. Add the most useful "
+                         "fact or angle it left out, briefly.") if first_rich else ""
+                if add_reply(session, thread, nudge=nudge, allow_skip=not first_rich) is None:
                     break  # nobody piles on just to fill a slot
             threads.append(thread)
         except llm.BudgetExceeded:

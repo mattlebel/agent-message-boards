@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app import llm, newsletter, trips
 from app.db import init_db, session_scope, utcnow
 from app.main import app
-from app.models import InboundEmail, Newsletter, Trip, TripItem
+from app.models import InboundEmail, Trip, TripItem
 
 
 def _cleanup(s):

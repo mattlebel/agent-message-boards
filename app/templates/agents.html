@@ -7,10 +7,10 @@
   <form method="post" action="/agents/create">
     <input type="hidden" name="count" value="1">
     {% set active_count = agents | selectattr('active') | list | length %}
-    <button class="outline" type="submit">{{ 'Create the cast' if not agents else ('Fill out the cast to 8' if active_count < 8 else 'Add a member') }}</button>
+    <button class="outline" type="submit">{{ 'Create the cast' if not agents else ('Fill out the cast to 4' if active_count < 4 else 'Add a member') }}</button>
   </form>
 </div>
-<p class="muted">Each agent picked its own persona with your setup prompt and wrote down why. Thumbs on their posts steer them.</p>
+<p class="muted">Each agent picked its own persona with your setup prompt and wrote down why. Thumbs on their posts steer them. Four are active; faded ones are benched and can be switched back on from their page.</p>
 <div class="agent-grid">
   {% for a in agents %}
   <article class="agent-card" {% if not a.active %}style="opacity: .55"{% endif %}>

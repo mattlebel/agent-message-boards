@@ -81,6 +81,8 @@ def triage(session: Session) -> int:
                 "Concrete news, deals with real value, upcoming races/events, drops, and lively community "
                 "threads score high. Notes are one plain line, no hype.\n\nAbout the owner:\n" + profile
             )
+            if topic.slug == "travel":
+                system += travel_focus(session)
             if any((i.extra or {}).get("source_kind") == "youtube" for i in chunk):
                 system += (
                     "\n\nThese are new videos from YouTube channels the owner subscribes to, so they already "
@@ -125,6 +127,22 @@ def triage(session: Session) -> int:
     return scored
 
 
+def travel_focus(session: Session) -> str:
+    """Travel posts only become threads when they touch the owner's own plans."""
+    from app import travel, trips
+
+    plans = [trips.describe(t) for t in trips.upcoming(session)]
+    regions = travel.regions(session)
+    return (
+        "\n\nFor this travel topic, score 8 or more only when an item touches one of these: "
+        "the owner's upcoming trips" + (f" ({'; '.join(plans)})" if plans else " (none planned)")
+        + ", places they watch" + (f" ({', '.join(regions)})" if regions else "")
+        + ", flights or deals departing Boston (BOS), or a deal with real, bookable value (a fare sale, "
+        "a transfer bonus, a status match, a strong award opening). General airline and hotel news, "
+        "reviews of places they don't watch, loyalty-program commentary and opinion posts score 6 or lower."
+    )
+
+
 DEFAULT_THRESHOLD = 7.0
 
 
@@ -159,6 +177,10 @@ def pick_for_discussion(session: Session, n: int) -> list[Item]:
     for q in by_topic.values():
         q[:] = [i for i in q if i not in picked]
     n += len(picked)
+    # No topic gets more than max_threads_per_topic threads in a cycle.
+    cap = int(settings_store.get(session, "max_threads_per_topic") or 2)
+    for q in by_topic.values():
+        del q[cap:]
     # Round-robin through topics, best topic first.
     queues = sorted((q for q in by_topic.values() if q), key=lambda q: rank(q[0]), reverse=True)
     while len(picked) < n and any(queues):

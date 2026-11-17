@@ -36,7 +36,9 @@ DEFAULTS: dict[str, Any] = {
         "editor": "claude-sonnet-5-5",  # the Zinsser / wayfinding editing pass on the newsletter
     },
     "daily_budget_usd": 3.0,
-    "threads_per_cycle": 5,
+    "threads_per_cycle": 4,
+    "max_threads_per_topic": 2,  # per cycle; alerts and eBay digests don't count
+    "max_newsletter_threads_per_topic": 2,
     "min_replies": 0,
     "max_replies": 2,
     # Times are US Eastern.
@@ -53,7 +55,7 @@ DEFAULTS: dict[str, Any] = {
     "paused": False,
     "applied_migrations": [],
     "youtube_unresolved": [],
-    "topic_thresholds": {"youtube": 5},  # minimum score for a thread; topics not listed use 7
+    "topic_thresholds": {"youtube": 5, "travel": 8},  # minimum score for a thread; topics not listed use 7
     "card_rules": "",  # empty = built-in rules in app/wallet.py (editable on the Wallet page)
     "travel_regions": [],  # places to collect One Mile at a Time reviews for
     "travel_backfilled": [],  # regions whose OMAAT archive has been searched

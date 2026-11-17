@@ -26,10 +26,9 @@ def test_full_flow():
     with session_scope() as s:
         assert seed(s)
         assert s.scalar(select(func.count(Topic.id))) == 8
-        personas.bootstrap(s, count=8)
+        personas.bootstrap(s)
         agents = list(s.scalars(select(Agent)))
-        assert len(agents) >= 8
-        assert not personas.coverage_gaps(s) or len(agents) == 11
+        assert len(agents) == 4
         _items(s)
         assert triage.triage(s) > 0
         for it in s.scalars(select(Item).where(Item.status == "scored")):

@@ -50,6 +50,44 @@ def _source_config(s: _SuggestedSource) -> dict:
     return {"url": s.url}
 
 
+def check_source(session: Session, src: dict) -> str:
+    """Try a suggested source once. Returns "" if it works, else the reason.
+
+    Web searches aren't tried (each costs a Claude search); feeds have to return entries and pages
+    have to load with some text on them.
+    """
+    from app.sources import FETCHERS
+
+    kind = src.get("kind")
+    if kind == "websearch":
+        return ""
+    fetcher = FETCHERS.get(kind)
+    if fetcher is None:
+        return f"unknown kind {kind}"
+    probe = Source(kind=kind, name=src.get("name", ""), config=dict(src.get("config") or {}), state={})
+    try:
+        raws = fetcher(probe, session)
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"[:200]
+    if kind == "rss" and not raws:
+        return "feed has no entries"
+    if kind == "page_watch" and not (probe.state or {}).get("lines"):
+        return "page has no readable text"
+    return ""
+
+
+def checked_sources(session: Session, sources: list[dict]) -> list[dict]:
+    """Keep the sources that work. Returns [] when none do (a lone web search counts as working)."""
+    good = []
+    for src in sources:
+        problem = check_source(session, src)
+        if problem:
+            log.info("suggested source %s dropped: %s", src.get("name") or src.get("kind"), problem)
+        else:
+            good.append(src)
+    return good
+
+
 def generate(session: Session) -> list[TopicSuggestion]:
     profile = wallet_profile(session)
     topics = list(session.scalars(select(Topic)))
@@ -117,10 +155,12 @@ def generate(session: Session) -> list[TopicSuggestion]:
         slug = slugify(s.name)
         if slug in existing_slugs:
             continue
-        sources = [
+        sources = checked_sources(session, [
             {"kind": src.kind, "name": src.name, "config": _source_config(src)}
             for src in s.sources if src.kind in KINDS
-        ]
+        ])
+        if not sources:
+            continue  # nothing about it works; don't suggest it
         row = TopicSuggestion(
             batch_key=batch, name=s.name[:200], slug=slug, description=s.description, rationale=s.why,
             sources=sources, token=secrets.token_urlsafe(24),
@@ -156,6 +196,24 @@ def add_from_suggestion(session: Session, sug: TopicSuggestion) -> Topic:
     session.commit()
     assign_topic(session, topic)
     return topic
+
+
+def first_fetch(session: Session, topic_id: int) -> str:
+    """Run right after a suggested topic is added: fetch every source once and flag the empty ones,
+    so a dud shows up on the Topics page (and the newsletter footer) the same day."""
+    from app import ingest
+
+    topic = session.get(Topic, topic_id)
+    if topic is None:
+        return ""
+    notes = []
+    for src in topic.sources:
+        new = ingest.fetch_one(session, src)
+        if not src.last_error and not new and src.kind in ("rss", "websearch"):
+            src.last_error = "No recent items on the first fetch. Check the source or remove it."
+            session.commit()
+        notes.append(f"{src.name or src.kind}: {len(new)} new" + (f" ({src.last_error})" if src.last_error else ""))
+    return "; ".join(notes)
 
 
 def send_weekly(session: Session, rows: list[TopicSuggestion]) -> Newsletter | None:

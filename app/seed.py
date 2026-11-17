@@ -266,6 +266,44 @@ def _retry_travel_backfill(session: Session) -> str:
     return "travel regions queued for a new archive search"
 
 
+def _cast_of_four(session: Session) -> str:
+    """Bench all but the four members the owner has liked most (and who post most); the four
+    left pick up the benched members' topics so every topic still has someone who cares."""
+    from sqlalchemy import func
+
+    from app.models import Agent, Feedback, Post
+
+    agents = list(session.scalars(select(Agent).where(Agent.active)))
+    if len(agents) <= 4:
+        return "cast already 4 or fewer"
+
+    def standing(a: Agent) -> float:
+        votes = session.scalar(select(func.coalesce(func.sum(Feedback.value), 0))
+                               .join(Post, Feedback.post_id == Post.id).where(Post.agent_id == a.id)) or 0
+        posts = session.scalar(select(func.count(Post.id)).where(Post.agent_id == a.id)) or 0
+        return votes * 2 + posts * 0.1
+
+    agents.sort(key=standing, reverse=True)
+    keep, bench = agents[:4], agents[4:]
+    for a in bench:
+        a.active = False
+    slugs = [t.slug for t in session.scalars(select(Topic).where(Topic.active))]
+    for i, slug in enumerate(slugs):
+        if not any(slug in (a.interests or []) for a in keep):
+            a = keep[i % len(keep)]
+            a.interests = [*(a.interests or []), slug]
+    settings_store_set_threads(session)
+    return f"kept {', '.join('@' + a.handle for a in keep)}; benched {len(bench)}"
+
+
+def settings_store_set_threads(session: Session) -> None:
+    """A saved threads_per_cycle above the new default of 4 comes down to 4."""
+    from app import settings_store
+
+    if int(settings_store.get(session, "threads_per_cycle") or 4) > 4:
+        settings_store.set(session, "threads_per_cycle", 4)
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -273,6 +311,7 @@ MIGRATIONS = [
     ("2026-11-13-videos-to-newsletter", _videos_to_newsletter),
     ("2026-11-13-rescore-videos", _rescore_videos),
     ("2026-11-15-retry-travel-backfill", _retry_travel_backfill),
+    ("2026-11-17-cast-of-four", _cast_of_four),
 ]
 
 

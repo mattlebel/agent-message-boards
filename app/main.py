@@ -533,9 +533,9 @@ def agent_page(request: Request, handle: str, user=Depends(require_user), sessio
 def create_agents(request: Request, background: BackgroundTasks, count: int = Form(1),
                   user=Depends(require_user), session: Session = Depends(get_session)):
     active = session.scalar(select(func.count(Agent.id)).where(Agent.active)) or 0
-    if active < 8:
+    if active < 4:
         background.add_task(jobs.run_named, "bootstrap")
-        flash(request, "Filling out the cast to 8. Each agent writes its own persona; refresh in a few minutes.")
+        flash(request, "Filling out the cast to 4. Each agent writes its own persona; refresh in a few minutes.")
     else:
         for _ in range(max(1, min(count, 3))):
             background.add_task(run_bg, lambda s: personas.create_persona(s, personas.coverage_gaps(s) or None))
@@ -840,20 +840,28 @@ def suggestions_page(request: Request, user=Depends(require_user), session: Sess
 
 
 @app.get("/s/{token}/add")
-def suggestion_one_click(request: Request, token: str, user=Depends(require_user), session: Session = Depends(get_session)):
+def suggestion_one_click(request: Request, background: BackgroundTasks, token: str, user=Depends(require_user),
+                         session: Session = Depends(get_session)):
     sug = session.scalar(select(TopicSuggestion).where(TopicSuggestion.token == token))
     if sug is None:
         raise HTTPException(404)
+    fresh = sug.status != "added"
     topic = suggestions.add_from_suggestion(session, sug)
-    flash(request, f"Added “{topic.name}”. The agents will pick it up next cycle.")
+    if fresh:
+        background.add_task(run_bg, suggestions.first_fetch, topic.id)
+    flash(request, f"Added “{topic.name}”. Its sources are being fetched now; refresh to see what came in.")
     return back(f"/topics/{topic.id}")
 
 
 @app.post("/suggestions/{sug_id}/add")
-def suggestion_add(request: Request, sug_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+def suggestion_add(request: Request, background: BackgroundTasks, sug_id: int, user=Depends(require_user),
+                   session: Session = Depends(get_session)):
     sug = session.get(TopicSuggestion, sug_id)
+    fresh = sug.status != "added"
     topic = suggestions.add_from_suggestion(session, sug)
-    flash(request, f"Added “{topic.name}”.")
+    if fresh:
+        background.add_task(run_bg, suggestions.first_fetch, topic.id)
+    flash(request, f"Added “{topic.name}”. Fetching its sources now.")
     return back("/suggestions")
 
 
@@ -1013,7 +1021,7 @@ MODEL_CHOICES = list(llm.PRICES)
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
     keys = ["profile", "owner_name", "newsletter_name", "models", "daily_budget_usd", "threads_per_cycle",
-            "min_replies", "max_replies", "schedule", "recipients", "paused"]
+            "max_threads_per_topic", "min_replies", "max_replies", "schedule", "recipients", "paused"]
     values = {k: settings_store.get(session, k) for k in keys}
     values["style_guide"] = style.guide(session)
     week_ago = utcnow() - timedelta(days=7)
@@ -1054,7 +1062,7 @@ async def save_settings(request: Request, user=Depends(require_user), session: S
     })
     try:
         settings_store.set(session, "daily_budget_usd", float(form.get("daily_budget_usd") or 3))
-        for key in ("threads_per_cycle", "min_replies", "max_replies"):
+        for key in ("threads_per_cycle", "max_threads_per_topic", "min_replies", "max_replies"):
             settings_store.set(session, key, int(form.get(key) or settings_store.DEFAULTS[key]))
     except ValueError:
         flash(request, "Numbers please.")

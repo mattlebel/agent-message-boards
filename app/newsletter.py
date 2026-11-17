@@ -110,6 +110,17 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
     # Reading-list threads get their own section, so they aren't counted twice.
     threads = [t for t in threads if not (t.topic and t.topic.slug == reading.TOPIC_SLUG)]
     threads.sort(key=thread_heat, reverse=True)
+    # At most N threads per topic (alerts always make it), so one busy topic can't fill the edition.
+    cap = int(settings_store.get(session, "max_newsletter_threads_per_topic") or 2)
+    per_topic: dict[int, int] = {}
+    kept = []
+    for t in threads:
+        if not t.is_alert:
+            if per_topic.get(t.topic_id, 0) >= cap:
+                continue
+            per_topic[t.topic_id] = per_topic.get(t.topic_id, 0) + 1
+        kept.append(t)
+    threads = kept
     # Items that never got a thread but scored well (e.g. YouTube videos) for "Things happened".
     discussed = {t.item_id for t in threads if t.item_id}
     leftovers = list(
@@ -121,7 +132,12 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
         )
     )
     leftovers = [i for i in leftovers if i.id not in discussed and (i.extra or {}).get("source_kind") != "youtube"]
-    return threads[:12], leftovers
+    capped = []
+    for i in leftovers:
+        if per_topic.get(i.topic_id, 0) < cap + 1:  # "Things happened" lines: a little more room
+            per_topic[i.topic_id] = per_topic.get(i.topic_id, 0) + 1
+            capped.append(i)
+    return threads[:12], capped
 
 
 def failing_sources_note(session: Session) -> str:
