@@ -83,10 +83,10 @@ def triage(session: Session) -> int:
             )
             if any((i.extra or {}).get("source_kind") == "youtube" for i in chunk):
                 system += (
-                    "\n\nThese are new videos from YouTube channels the owner subscribes to, so he already "
+                    "\n\nThese are new videos from YouTube channels the owner subscribes to, so they already "
                     "likes these creators. Score how worth watching each video is: substance over filler, "
                     "a real update or story over a sponsor read or a rerun. Don't mark a video down because its "
-                    "subject isn't in his profile; his subscriptions are his interests. Livestream replays, "
+                    "subject isn't in the owner's profile; their subscriptions are their interests. Livestream replays, "
                     "trailers and clip compilations score low."
                 )
             user = (
@@ -247,7 +247,8 @@ def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertD
             if d and d.is_alert:
                 d = style.polish(
                     d, purpose="alert_text", role="alerts",
-                    system="You write short, plain alert emails for one reader. Facts only, no hype.\n\n"
+                    system="You write short, plain alert emails for one reader. Facts only, no hype. "
+                           "The headline should tell the reader whether to act. " + style.SELF_EDIT + "\n\n"
                            "Writing rules:\n" + style.guide(session),
                     user=f"The item:\n{item_brief(it, 1500)}\n\nKeep every fact; only fix the wording.",
                     critical=True, max_tokens=1500,

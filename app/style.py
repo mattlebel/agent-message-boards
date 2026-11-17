@@ -65,6 +65,48 @@ Avoid:
 27. Fake specificity: don't invent numbers, quotes, dates or places. Specific is good only when it's true.
 """
 
+# The lens for editing: Zinsser for the sentences, a wayfinding / decision designer for the structure.
+EDITOR_BRIEF = """\
+Edit this the way William Zinsser would (On Writing Well: simplicity, clarity, brevity, humanity), and the
+way a wayfinding and decision-making designer would reorganize it so the reader can find their way and act.
+
+As Zinsser:
+- Cut clutter. Every sentence has to do work; every word that isn't doing work goes.
+- Short, plain words. Active verbs. One idea per paragraph.
+- Keep the writer's voice, opinions and jokes. Simpler is not blander.
+
+As a wayfinding / decision designer:
+- Within the first few lines the reader should know what matters most and what, if anything, to do.
+- Put decisions, deadlines and dated actions where the eye lands first. Never bury them in a footnote.
+- Headings say what's in the section. Order by importance to the reader, not by when things happened.
+- Group related items. Make the next step (the link, the date, the price) easy to spot.
+- If something doesn't help the reader decide, act or enjoy it, cut it.
+
+Rules: keep every fact, link, number and image exactly as given. Don't add facts, links or images. Return
+the complete revised piece in the same format."""
+
+# One line for prompts that write once and don't get a separate editing pass.
+SELF_EDIT = ("Before you answer, edit yourself the way William Zinsser would (cut every word that isn't doing "
+             "work) and order it the way a wayfinding designer would (what matters and what to do comes first).")
+
+
+def edit(draft, *, purpose: str, voice: str = "", critical: bool = True, max_tokens: int = 12000,
+         session=None):
+    """A separate editor pass (role "editor") over a structured draft. Returns the draft if it fails."""
+    from app import llm
+
+    rules = f"\n\nWriting rules:\n{guide(session)}" if session is not None else ""
+    system = EDITOR_BRIEF + (f"\n\nThe piece's intended voice and format:\n{voice}" if voice else "") + rules
+    try:
+        return llm.generate(
+            purpose=f"{purpose}_edit", role="editor", system=system,
+            user=f"The draft:\n{draft.model_dump_json()}\n\nEdit and reorganize it.",
+            max_tokens=max_tokens, effort="medium", schema=type(draft), critical=critical, fake=lambda: draft,
+        ).parsed
+    except (llm.BudgetExceeded, llm.LlmError):
+        return draft
+
+
 # Mechanical tells worth an automatic second draft. Kept narrow on purpose: these are rarely the
 # best choice in a forum post, and matching them is cheap.
 _PATTERNS: list[tuple[str, str]] = [

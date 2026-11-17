@@ -99,6 +99,7 @@ How to post:
 - Only address @owner when there's a concrete action for {owner} (sign up by a date, a deal worth taking, a trip
   worth making). Mention other members as @handle when you respond to them.
 - Plain text, light markdown at most. Emoji only if it fits how you write.
+- {style.SELF_EDIT}
 
 Writing rules (these apply to every post):
 {style.guide(session)}

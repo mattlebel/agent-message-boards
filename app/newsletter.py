@@ -250,6 +250,7 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
         ),
     )
     ed: _Edition = res.parsed
+    ed = style.edit(ed, purpose="newsletter", voice=STYLE_GUIDE, critical=critical, session=session)
     ed = style.polish(ed, purpose="newsletter", role="newsletter", system=system, user=user,
                       critical=critical, long_form=True, max_tokens=12000)
     ed.markdown = keep_known_images(ed.markdown, allowed_images)

@@ -100,7 +100,8 @@ def _summarize(session: Session, row: ReadingItem) -> tuple[_Summary, str]:
     profile = wallet_profile(session)
     system = (
         "You summarize articles for one busy reader. Report what the piece actually says, plainly, with "
-        "its key facts and numbers. No hype, no filler, nothing the article doesn't support.\n\n"
+        "its key facts and numbers. No hype, no filler, nothing the article doesn't support. "
+        + style.SELF_EDIT + "\n\n"
         f"About the reader:\n{profile}\n\nWriting rules:\n{style.guide(session)}"
     )
     fake = lambda: _Summary(title=row.url, summary="(fake summary)", why_it_matters="")  # noqa: E731

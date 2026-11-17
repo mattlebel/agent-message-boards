@@ -104,7 +104,8 @@ def generate(session: Session) -> list[TopicSuggestion]:
         ]),
     )
     system_plain = ("You are a sharp, well-read friend who finds great niche corners of the internet for people. "
-                    "Write the 'why' lines plainly, like a text to a friend.\n\nWriting rules:\n" + style.guide(session))
+                    "Write the 'why' lines plainly, like a text to a friend. " + style.SELF_EDIT
+                    + "\n\nWriting rules:\n" + style.guide(session))
     ideas = style.polish(res.parsed, purpose="suggestions", role="suggestions", system=system_plain,
                          user="Here are topic suggestions for a personal message board. Keep every fact, "
                               "source and URL exactly as is; only fix the wording of names, descriptions and why lines.",

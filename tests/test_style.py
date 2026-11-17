@@ -264,3 +264,27 @@ def test_failing_sources_footer_and_haiku_override(monkeypatch):
     src = Source(kind="websearch", name="x", config={"query": "q", "model": "claude-haiku-5-5"})
     web.fetch_websearch(src, None)
     assert seen["model"] == "claude-haiku-5-5"
+
+
+def test_newsletter_gets_an_editor_pass(monkeypatch):
+    from app import llm
+    from app.newsletter import _Edition
+
+    draft = _Edition(subject="s", preheader="p", markdown="## Things\n\nA long, winding section.")
+    calls = []
+
+    def fake_generate(**kw):
+        calls.append((kw["purpose"], kw["role"]))
+        assert "Zinsser" in kw["system"] and "wayfinding" in kw["system"]
+        return llm.LlmResult(text="", parsed=draft.model_copy(update={"markdown": "## What to do\n\nShorter."}))
+
+    monkeypatch.setattr(llm, "generate", fake_generate)
+    out = style.edit(draft, purpose="newsletter", voice="Money Stuff parody")
+    assert calls == [("newsletter_edit", "editor")]
+    assert out.markdown.startswith("## What to do")
+
+    def broken(**kw):
+        raise llm.LlmError("down")
+
+    monkeypatch.setattr(llm, "generate", broken)
+    assert style.edit(draft, purpose="newsletter") is draft  # a failed edit keeps the draft
