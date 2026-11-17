@@ -23,7 +23,7 @@ def recipients(session) -> list[str]:
     return extra or [config.EMAIL_TO]
 
 
-def send(to: list[str], subject: str, html: str, text: str = "", scheduled_at: str = "") -> str:
+def send(to: list[str], subject: str, html: str, text: str = "", scheduled_at: str = "", reply_to: str = "") -> str:
     """Returns the Resend message id. Without an API key, logs and returns ''.
 
     scheduled_at (ISO 8601) lets us build the newsletter early and have it land on the minute.
@@ -39,6 +39,8 @@ def send(to: list[str], subject: str, html: str, text: str = "", scheduled_at: s
         params["text"] = text
     if scheduled_at:
         params["scheduled_at"] = scheduled_at
+    if reply_to:
+        params["reply_to"] = reply_to
     try:
         resp = resend.Emails.send(params)
     except Exception as e:

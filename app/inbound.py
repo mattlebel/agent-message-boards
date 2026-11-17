@@ -67,6 +67,12 @@ def process_email(session: Session, row: InboundEmail, email: dict) -> None:
         row.items_created = trips.process_email(session, row, text)
         row.status = "processed"
         return
+    from app import mailcommands
+
+    command = mailcommands.command_for(addresses)
+    if command:  # read@ (reading list) and ask@ (questions by replying to the newsletter)
+        mailcommands.handle(session, row, text, command)
+        return
     topic = _topic_from_address(session, addresses)
     topics = list(session.scalars(select(Topic).where(Topic.active)))
     if topic is None and topics:

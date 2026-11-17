@@ -28,6 +28,8 @@
   </div>
   <label>Send emails to (comma separated; blank = {{ config.EMAIL_TO }})
     <input name="recipients" value="{{ values.recipients | join(', ') }}"></label>
+  <label>Trusted senders for read@ and ask@ (comma separated; your own domain's addresses always count)
+    <input name="trusted_senders" value="{{ values.trusted_senders | join(', ') }}" placeholder="you@gmail.com"></label>
 
   <h5>Schedule (US Eastern)</h5>
   <div class="grid">

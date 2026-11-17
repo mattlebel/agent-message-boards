@@ -27,7 +27,7 @@ def test_newsletter_keeps_only_provided_images():
 def test_alert_email_leads_with_picture(monkeypatch):
     init_db()
     sent = []
-    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="": sent.append(html) or "id")
+    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="", **kw: sent.append(html) or "id")
     with session_scope() as s:
         topic = Topic(slug="img-alert", name="Inciardi")
         s.add(topic)

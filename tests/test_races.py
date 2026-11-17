@@ -32,7 +32,7 @@ def test_research_alerts_and_page(monkeypatch):
 
     monkeypatch.setattr(llm, "generate", fake_generate)
     sent = []
-    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="": sent.append(subject) or "id")
+    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="", **kw: sent.append(subject) or "id")
     with session_scope() as s:
         race = Race(name="Test City Marathon 2027", kind="major")
         s.add(race)

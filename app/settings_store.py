@@ -52,6 +52,7 @@ DEFAULTS: dict[str, Any] = {
         "weekly_time": "15:00",
     },
     "recipients": [],  # empty = EMAIL_TO env var
+    "trusted_senders": [],  # besides ALLOWED_EMAIL_DOMAIN: who may use read@ and ask@
     "style_guide": "",  # empty = built-in anti-"LLM speak" rules in app/style.py
     "paused": False,
     "applied_migrations": [],

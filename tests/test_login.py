@@ -15,7 +15,7 @@ def _setup(monkeypatch):
     monkeypatch.setattr(config, "DEV_MODE", False)
     monkeypatch.setattr(config, "RESEND_API_KEY", "test-key")
     sent = []
-    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="": sent.append((to, text)) or "id")
+    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="", **kw: sent.append((to, text)) or "id")
     return TestClient(app), sent
 
 
@@ -118,7 +118,7 @@ def test_email_share_links(monkeypatch):
     assert f"{base}/t/{a_id}?k=" in out and out.count("?k=") == 1 and "#p3" in out
 
     captured = []
-    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="": captured.append(html) or "id")
+    monkeypatch.setattr(emailer, "send", lambda to, subject, html, text="", scheduled_at="", **kw: captured.append(html) or "id")
     with session_scope() as s:
         nl = Newsletter(kind="daily", subject="s", markdown=f"{base}/t/{a_id}", html=f'<a href="{base}/t/{a_id}">t</a>')
         s.add(nl)

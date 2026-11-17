@@ -1073,7 +1073,7 @@ MODEL_CHOICES = list(llm.PRICES)
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
     keys = ["profile", "owner_name", "newsletter_name", "models", "daily_budget_usd", "threads_per_cycle",
-            "max_threads_per_topic", "min_replies", "max_replies", "schedule", "recipients", "paused"]
+            "max_threads_per_topic", "min_replies", "max_replies", "schedule", "recipients", "trusted_senders", "paused"]
     values = {k: settings_store.get(session, k) for k in keys}
     values["style_guide"] = style.guide(session)
     week_ago = utcnow() - timedelta(days=7)
@@ -1172,6 +1172,8 @@ async def save_settings(request: Request, user=Depends(require_user), session: S
     settings_store.set(session, "schedule", schedule)
     recips = [r.strip() for r in re.split(r"[,\s]+", form.get("recipients") or "") if "@" in r]
     settings_store.set(session, "recipients", recips)
+    trusted = [r.strip().lower() for r in re.split(r"[,\s]+", form.get("trusted_senders") or "") if "@" in r]
+    settings_store.set(session, "trusted_senders", trusted)
     settings_store.set(session, "paused", form.get("paused") == "on")
     session.commit()
     flash(request, "Settings saved.")
