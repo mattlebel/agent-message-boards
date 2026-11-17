@@ -9,7 +9,7 @@ import json
 import logging
 import re
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import quote
 
 import markdown as md
@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import (clicks, config, strava, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
+from app import (clicks, config, races, strava, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
                  suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, peek_login_token,
@@ -32,7 +32,7 @@ from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
     Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, ReadingItem, Source, Thread, Topic,
-    Trip, TripItem, WalletCard,
+    Race, RaceDate, Trip, TripItem, WalletCard,
     TopicSuggestion, YoutubeChannel,
 )
 from app.seed import run_migrations, seed
@@ -714,6 +714,98 @@ def _research_bg(session: Session, trip_id: int) -> None:
     trip = session.get(Trip, trip_id)
     if trip and trips.research_due(trip):
         trips.research(session, trip)
+
+
+# --- races ------------------------------------------------------------------------------
+
+
+@app.get("/races", response_class=HTMLResponse)
+def races_page(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    rows = list(session.scalars(select(Race)))
+    order = {"registered": 0, "target": 1, "done": 2, "dropped": 3}
+    rows.sort(key=lambda r: (order.get(r.status, 9), r.race_date or datetime.max))
+    dates = {r.id: races.dates_for(session, r) for r in rows}
+    return render(request, "races.html", races=rows, dates=dates, soon=races.upcoming_dates(session, 45),
+                  kinds=races.KINDS, countdown=races.countdown, today=races.today())
+
+
+def _race_research_bg(session: Session, race_id: int) -> None:
+    race = session.get(Race, race_id)
+    if race:
+        races.research(session, race)
+
+
+@app.post("/races")
+def races_add(request: Request, background: BackgroundTasks, name: str = Form(...), kind: str = Form("other"),
+              race_date: str = Form(""), location: str = Form(""), url: str = Form(""), notes: str = Form(""),
+              user=Depends(require_user), session: Session = Depends(get_session)):
+    race = Race(name=name.strip()[:200], kind=kind if kind in ("major", "mile", "other") else "other",
+                race_date=_date(race_date), location=location.strip()[:200],
+                url=url.strip() if url.strip().startswith("http") else "", notes=notes.strip())
+    session.add(race)
+    session.commit()
+    background.add_task(run_bg, _race_research_bg, race.id)
+    flash(request, f"Added {race.name}. Looking up its registration dates now; refresh in a minute.")
+    return back(f"/races#race-{race.id}")
+
+
+@app.post("/races/{race_id}")
+def race_update(request: Request, race_id: int, status: str = Form("target"), notes: str = Form(""),
+                race_date: str = Form(""), user=Depends(require_user), session: Session = Depends(get_session)):
+    race = session.get(Race, race_id)
+    if race is None:
+        raise HTTPException(404)
+    if status in ("target", "registered", "done", "dropped"):
+        race.status = status
+    race.notes = notes.strip()
+    race.race_date = _date(race_date) or race.race_date
+    session.commit()
+    flash(request, "Saved.")
+    return back(f"/races#race-{race_id}")
+
+
+@app.post("/races/{race_id}/research")
+def race_research_now(request: Request, background: BackgroundTasks, race_id: int, user=Depends(require_user)):
+    background.add_task(run_bg, _race_research_bg, race_id)
+    flash(request, "Researching. Refresh in a minute.")
+    return back(f"/races#race-{race_id}")
+
+
+@app.post("/races/{race_id}/dates")
+def race_add_date(request: Request, race_id: int, date: str = Form(...), kind: str = Form("other"),
+                  label: str = Form(""), url: str = Form(""), user=Depends(require_user),
+                  session: Session = Depends(get_session)):
+    when = _date(date)
+    if when is None:
+        flash(request, "That date didn't parse.")
+        return back(f"/races#race-{race_id}")
+    kind = kind if kind in races.KINDS else "other"
+    session.add(RaceDate(race_id=race_id, kind=kind, label=label.strip()[:300] or races.KINDS[kind], date=when,
+                         confirmed=True, url=url.strip() if url.strip().startswith("http") else "", source="manual"))
+    session.commit()
+    return back(f"/races#race-{race_id}")
+
+
+@app.post("/race-dates/{date_id}/delete")
+def race_date_delete(date_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    d = session.get(RaceDate, date_id)
+    race_id = d.race_id if d else 0
+    if d:
+        session.delete(d)
+        session.commit()
+    return back(f"/races#race-{race_id}")
+
+
+@app.post("/races/{race_id}/delete")
+def race_delete(request: Request, race_id: int, user=Depends(require_user), session: Session = Depends(get_session)):
+    race = session.get(Race, race_id)
+    if race:
+        for d in races.dates_for(session, race):
+            session.delete(d)
+        session.delete(race)
+        session.commit()
+        flash(request, f"Removed {race.name}.")
+    return back("/races")
 
 
 @app.post("/trips")

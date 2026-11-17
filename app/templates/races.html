@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Races{% endblock %}
+{% block content %}
+<h2>Races</h2>
+<p class="muted">Your target races and the dates that decide whether you get in. Each race is researched from
+  official sources every two weeks (every three days when a date is near). You get an email the day a
+  registration window opens or a draw happens, and a week and a day before a window closes.</p>
+
+{% if soon %}
+<article>
+  <h5 style="margin-bottom:.5rem;">Next 45 days</h5>
+  <table class="compact">
+    <tbody>
+    {% for race, d in soon %}
+    <tr>
+      <td style="white-space:nowrap;"><b>{{ d.date.strftime('%a %b %-d') }}</b></td>
+      <td><span class="pill {{ 'alert' if countdown(d.date) in ('today', 'tomorrow') else '' }}">{{ countdown(d.date) }}</span></td>
+      <td>{{ race.name }}: {% if d.url %}<a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.label }}</a>{% else %}{{ d.label }}{% endif %}
+        {% if not d.confirmed %}<span class="small muted">(expected)</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
+{% for r in races %}
+<article id="race-{{ r.id }}" {% if r.status in ('done', 'dropped') %}style="opacity:.6"{% endif %}>
+  <header class="btn-row" style="justify-content: space-between;">
+    <div>
+      {% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener"><b>{{ r.name }}</b></a>{% else %}<b>{{ r.name }}</b>{% endif %}
+      <span class="muted small">{{ r.location }}{% if r.race_date %} · {{ r.race_date.strftime('%a %b %-d, %Y') }}{% endif %}</span>
+    </div>
+    <span class="pill">{{ r.status }}{% if r.race_date and r.status in ('target', 'registered') and countdown(r.race_date) != 'past' %} · {{ countdown(r.race_date) }}{% endif %}</span>
+  </header>
+  {% if r.research_notes %}<p class="small">{{ r.research_notes }}</p>{% endif %}
+  {% set ds = dates[r.id] %}
+  {% if ds %}
+  <table class="compact">
+    <tbody>
+    {% for d in ds %}
+    <tr {% if d.date < today %}class="muted"{% endif %}>
+      <td style="white-space:nowrap;">{{ d.date.strftime('%b %-d, %Y') }}</td>
+      <td>{% if d.url %}<a href="{{ d.url }}" target="_blank" rel="noopener">{{ d.label }}</a>{% else %}{{ d.label }}{% endif %}
+        {% if not d.confirmed %}<span class="small muted">(expected)</span>{% endif %}
+        {% if d.source == 'manual' %}<span class="small muted">(yours)</span>{% endif %}</td>
+      <td><form class="inline-form" method="post" action="/race-dates/{{ d.id }}/delete"><button class="secondary outline" type="submit" title="Remove this date">×</button></form></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% elif r.status in ('target', 'registered') %}
+  <p class="small muted">{{ 'No dates found yet.' if r.last_researched_at else 'Not researched yet; it runs in the next cycle.' }}</p>
+  {% endif %}
+  <details>
+    <summary class="small">Edit, add a date, research</summary>
+    <form method="post" action="/races/{{ r.id }}">
+      <div class="grid">
+        <label>Status
+          <select name="status">{% for s in ('target', 'registered', 'done', 'dropped') %}<option {% if r.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+        </label>
+        <label>Race date <input type="date" name="race_date" value="{{ r.race_date.strftime('%Y-%m-%d') if r.race_date else '' }}"></label>
+      </div>
+      <label>What you're after <textarea name="notes" rows="2">{{ r.notes }}</textarea></label>
+      <button type="submit" class="outline">Save</button>
+    </form>
+    <form method="post" action="/races/{{ r.id }}/dates">
+      <div class="grid">
+        <label>Date <input type="date" name="date" required></label>
+        <label>Type <select name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+      </div>
+      <div class="grid">
+        <label>Label (optional) <input name="label" placeholder="9+1 registration window opens"></label>
+        <label>Link (optional) <input name="url" placeholder="https://"></label>
+      </div>
+      <button type="submit" class="outline">Add date</button>
+    </form>
+    <div class="btn-row">
+      <form method="post" action="/races/{{ r.id }}/research"><button class="outline secondary" type="submit">Research now</button></form>
+      <form method="post" action="/races/{{ r.id }}/delete" onsubmit="return confirm('Remove this race and its dates?')"><button class="outline secondary" type="submit">Remove race</button></form>
+    </div>
+    {% if r.last_researched_at %}<p class="small muted">Last researched {{ r.last_researched_at.strftime('%b %-d') }}.</p>{% endif %}
+  </details>
+</article>
+{% else %}
+<p class="muted">No races yet.</p>
+{% endfor %}
+
+<details {% if not races %}open{% endif %}>
+  <summary role="button" class="outline">Add a race</summary>
+  <form method="post" action="/races">
+    <div class="grid">
+      <label>Name <input name="name" required placeholder="Boston Marathon 2027"></label>
+      <label>Type <select name="kind"><option value="major">Major</option><option value="mile">Mile</option><option value="other" selected>Other</option></select></label>
+    </div>
+    <div class="grid">
+      <label>Race date (optional) <input type="date" name="race_date"></label>
+      <label>Location (optional) <input name="location"></label>
+    </div>
+    <label>Official page (optional) <input name="url" placeholder="https://"></label>
+    <label>What you're after (optional) <textarea name="notes" rows="2" placeholder="Lottery entry; qualifying time; goal time"></textarea></label>
+    <button type="submit">Add race</button>
+  </form>
+</details>
+{% endblock %}

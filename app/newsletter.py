@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.wallet import profile_text as wallet_profile
-from app import clicks, config, emailer, images, llm, reading, settings_store, share, style, travel, trips
+from app import clicks, config, emailer, images, llm, races, reading, settings_store, share, style, travel, trips
 from app.db import utcnow
 from app.discussion import thread_heat
 from app.models import Coverage, Item, Newsletter, Source, Thread, Topic
@@ -249,9 +249,11 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
     if morning:
         trip_list = [t for t in trip_list if t.start_date and t.start_date <= trips.today() + timedelta(days=7)]
         trip_items = [i for i in trip_items if i.trip_id in {t.id for t in trip_list}]
+    race_rows = races.for_newsletter(session, morning)
     review_ids = {r.id for r in reviews}
     leftovers = [i for i in leftovers if i.id not in review_ids]
-    if not threads and not leftovers and not saved and not videos and not reviews and not trip_items:
+    if not threads and not leftovers and not saved and not videos and not reviews and not trip_items \
+            and not race_rows:
         log.info("nothing new for the newsletter")
         return None
     name = settings_store.get(session, "newsletter_name")
@@ -296,6 +298,13 @@ def build_daily(session: Session, edition: str, critical: bool = True) -> Newsle
             "with links and dates, and, when it's within a week, the flight and booking details as a quick list.\n"
             + trips.newsletter_material(session, trip_list, trip_items) + "\n\n"
             if trip_list else ""
+        )
+        + (
+            "THE READER'S RACE CALENDAR (their target races). Put any date within a week in the actions "
+            "('## Today' in the morning, '## Dates' in the evening) with its link. In the evening edition, "
+            "a short '## Races' section can cover the rest. Say 'expected' for dates not yet announced.\n"
+            + races.newsletter_material(race_rows) + "\n\n"
+            if race_rows else ""
         )
         + (
             "NEW ONE MILE AT A TIME REVIEWS FROM PLACES THE READER IS WATCHING. Give them a section, "

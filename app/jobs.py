@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import (config, discussion, inbound, ingest, llm, newsletter, personas, settings_store, suggestions,
-                 strava, travel, triage, trips, wallet)
+                 races, strava, travel, triage, trips, wallet)
 from app.db import init_db, job_lock, session_scope, utcnow
 from app.models import Agent, JobRun
 
@@ -83,13 +83,15 @@ def cycle(session: Session) -> str:
     travel.classify_new(session)
     travel.backfill_new_regions(session)  # regions whose archive search hasn't worked yet
     trips.research_due_trips(session)  # ideas and events for upcoming trips
+    races.research_due_races(session)  # registration windows, draws, cutoffs
+    race_alerts = races.send_alerts(session)
     n = int(settings_store.get(session, "threads_per_cycle"))
     picked = triage.pick_for_discussion(session, n)
     threads = discussion.discuss(session, picked)
     revisited = discussion.revisit(session)
     return (
         f"{len(new)} new items, {alerts} alerts, {scored} scored, {filtered} card offers filtered, "
-        f"{len(picked)} picked, "
+        f"{len(picked)} picked, {race_alerts} race alerts, "
         f"{len(threads)} threads, {revisited} revisits, spent today ${llm.spent_today():.2f}"
     )
 

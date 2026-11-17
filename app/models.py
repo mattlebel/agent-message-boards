@@ -329,3 +329,36 @@ class Click(Base):
     thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     topic_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class Race(Base):
+    """A race you're aiming at (a major, a mile, anything). Its key dates hang off it as RaceDates."""
+
+    __tablename__ = "races"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(20), default="other")  # major, mile, other
+    race_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    location: Mapped[str] = mapped_column(String(200), default="")
+    url: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="target")  # target, registered, done, dropped
+    notes: Mapped[str] = mapped_column(Text, default="")  # what you're after: qualifying route, lottery, goal time
+    research_notes: Mapped[str] = mapped_column(Text, default="")  # how entry works, from the last research
+    last_researched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RaceDate(Base):
+    """A dated step for a race: registration or lottery window, draw, qualifying cutoff, the race itself."""
+
+    __tablename__ = "race_dates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    race_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(30), default="other")  # opens, closes, draw, cutoff, race, other
+    label: Mapped[str] = mapped_column(Text, default="")
+    date: Mapped[datetime] = mapped_column(DateTime)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)  # announced officially vs. expected
+    url: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(20), default="research")  # research, manual
+    alerted: Mapped[str] = mapped_column(String(100), default="")  # comma list of alerts sent: week, day, today
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

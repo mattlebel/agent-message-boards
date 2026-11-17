@@ -309,6 +309,13 @@ def _drop_reddit_sources(session: Session) -> str:
     return f"removed {len(rows)} Reddit sources"
 
 
+def _default_races(session: Session) -> str:
+    """Start the Races page with the remaining majors, NYC 2027 and mile races."""
+    from app import races
+
+    return f"added {races.seed_defaults(session)} races"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -318,6 +325,7 @@ MIGRATIONS = [
     ("2026-11-15-retry-travel-backfill", _retry_travel_backfill),
     ("2026-11-17-cast-of-four", _cast_of_four),
     ("2026-11-17-drop-reddit-sources", _drop_reddit_sources),
+    ("2026-11-17-default-races", _default_races),
 ]
 
 
