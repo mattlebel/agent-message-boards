@@ -22,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import (clicks, config, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
+from app import (clicks, config, strava, discussion, emailer, ingest, jobs, llm, personas, reading, settings_store, share, style,
                  suggestions, travel, triage, trips, wallet, youtube)
 from app.auth import (
     LoginRequired, can_send_link, current_user, email_allowed, make_login_token, peek_login_token,
@@ -1000,9 +1000,53 @@ def settings_page(request: Request, user=Depends(require_user), session: Session
         "Resend webhook secret": bool(config.RESEND_WEBHOOK_SECRET),
         "Email sign-in links (Resend)": bool(config.RESEND_API_KEY),
         "eBay API": bool(config.EBAY_CLIENT_ID),
+        "Strava app (STRAVA_CLIENT_ID / SECRET)": strava.configured(),
     }
+    strava_info = {"configured": strava.configured(), "connected": strava.connected(session),
+                   "athlete": (settings_store.get(session, "strava") or {}).get("athlete", ""),
+                   "summary": settings_store.get(session, "strava_summary") or ""}
     return render(request, "settings.html", values=values, models=MODEL_CHOICES, by_purpose=by_purpose,
-                  by_day=by_day, runs=runs, env=env, spent=llm.spent_today())
+                  by_day=by_day, runs=runs, env=env, spent=llm.spent_today(), strava=strava_info)
+
+
+@app.get("/strava/connect")
+def strava_connect(user=Depends(require_user)):
+    if not strava.configured():
+        raise HTTPException(400, "Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET on Render first.")
+    return RedirectResponse(strava.authorize_url(), status_code=303)
+
+
+@app.get("/strava/callback")
+def strava_callback(request: Request, code: str = "", scope: str = "", state: str = "", error: str = "",
+                    user=Depends(require_user), session: Session = Depends(get_session)):
+    if error or not code:
+        flash(request, f"Strava wasn't connected ({error or 'no code'}).")
+        return back("/settings#strava")
+    if not strava.state_ok(state):
+        flash(request, "That Strava link expired. Try Connect again.")
+        return back("/settings#strava")
+    try:
+        strava.exchange_code(session, code, scope)
+        summary = strava.refresh_summary(session)
+    except Exception as e:  # show any failure on the page
+        log.exception("Strava connect failed")
+        flash(request, f"Strava: {e}")
+        return back("/settings#strava")
+    flash(request, "Strava connected." + ("" if summary else " No runs in the last six weeks yet."))
+    return back("/settings#strava")
+
+
+@app.post("/strava/disconnect")
+def strava_disconnect(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    strava.disconnect(session)
+    flash(request, "Strava disconnected and its tokens deleted.")
+    return back("/settings#strava")
+
+
+@app.post("/strava/refresh")
+def strava_refresh(request: Request, user=Depends(require_user), session: Session = Depends(get_session)):
+    flash(request, "Training summary refreshed." if strava.refresh_summary(session) else "No runs found.")
+    return back("/settings#strava")
 
 
 @app.post("/settings")

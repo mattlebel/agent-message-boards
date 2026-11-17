@@ -61,6 +61,8 @@ DEFAULTS: dict[str, Any] = {
     "travel_regions": [],  # places to collect One Mile at a Time reviews for
     "travel_backfilled": [],  # regions whose OMAAT archive has been searched
     "share_secret": "",  # signs the 24-hour email links; created automatically
+    "strava": {},  # OAuth tokens after "Connect Strava" (never shown or exported)
+    "strava_summary": "",  # recent training, refreshed each cycle
 }
 
 

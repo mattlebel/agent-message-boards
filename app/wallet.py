@@ -71,7 +71,8 @@ def profile_text(session: Session) -> str:
     """The owner's profile plus wallet summary, for every prompt that reads the profile."""
     profile = settings_store.get(session, "profile")
     wallet = summary(session)
-    return profile + (f"\n{wallet}\n" if wallet else "")
+    training = settings_store.get(session, "strava_summary") or ""
+    return profile + (f"\n{wallet}\n" if wallet else "") + (f"\n{training}\n" if training else "")
 
 
 # --- filtering card offers ------------------------------------------------------------------

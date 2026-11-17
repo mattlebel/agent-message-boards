@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import (config, discussion, inbound, ingest, llm, newsletter, personas, settings_store, suggestions,
-                 travel, triage, trips, wallet)
+                 strava, travel, triage, trips, wallet)
 from app.db import init_db, job_lock, session_scope, utcnow
 from app.models import Agent, JobRun
 
@@ -74,6 +74,7 @@ def cycle(session: Session) -> str:
     if not session.scalar(select(Agent.id).limit(1)):
         personas.bootstrap(session)
     inbound.process_pending(session)
+    strava.refresh_summary(session)  # recent training goes into the profile every prompt reads
     new = ingest.run_ingest(session)
     new += ebay_digests(session)
     alerts = alerts_for_pending(session)
