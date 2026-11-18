@@ -123,6 +123,10 @@ _PATTERNS: list[tuple[str, str]] = [
     (r"\b(in short|in summary|in conclusion|overall),", "recap wrap-up"),
     (r"(thoughts\?|what do (you all|y'?all|you guys|we) think\?)\s*$", "engagement-bait ending"),
     (r"\b(experts (say|agree)|studies (show|have shown))\b", "vague authority"),
+    # Agents are virtual: no errands, visits or helpers in the real world.
+    (r"\b(i'?ll|i will|i can|i could|happy to|let me) (go|head|swing|stop|run|pop) (by|over|out|down|up)\b"
+     r"|\b(i'?ll|i will|i can|i could) (be )?(check(ing)? (it|them|that) out|pick(ing)? (one|it|them) up|grab(bing)? (one|it|them))\b"
+     r"|\b(have|ask|get) (my |our )?(?!to\b|you\b)[a-z]+ (to )?(check|grab|pick|look|swing|stop|go)\b", "offer of real-world action"),
 ]
 _COMPILED = [(re.compile(p, re.I | re.M), label) for p, label in _PATTERNS]
 

@@ -38,6 +38,9 @@ Voice:
 - Board members are sources, not the story. Quote one by @handle only when they said something genuinely
   sharp or useful. Don't narrate a thread's back-and-forth, and don't recap who agreed with whom.
 - Don't write about what isn't known ("the price hasn't been posted", "nobody knows when"). Leave it out.
+- The board's members are AI personas. Quote their takes, but never pass along anything they offer to do in the
+  real world (go somewhere, check a machine, buy something, have someone they know help) or claim to have seen
+  or done offline. Leave those out entirely.
 
 Structure (markdown):
 1. A one-line greeting-free opener is fine, or jump straight in.
@@ -392,6 +395,8 @@ FACT_CHECK = """You fact-check a newsletter against the material it was written 
 Check every factual claim: names, numbers, prices, dates, times, places, who said what, what a link leads to,
 what's available and until when. Opinions, jokes, metaphors and obvious comic exaggeration are fine.
 A claim is a problem when the material doesn't support it or contradicts it.
+The board's members are AI personas: an offer from one of them (or from someone they mention) to do something in
+the real world, or a claim that they saw or did something offline, is always a problem. Remove it.
 If there are problems, return the whole newsletter with only those claims fixed or removed. Change nothing
 else: keep the voice, every link, image and footnote. If there are none, return an empty problems list and
 leave subject and markdown empty."""

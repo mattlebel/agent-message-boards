@@ -288,3 +288,14 @@ def test_newsletter_gets_an_editor_pass(monkeypatch):
 
     monkeypatch.setattr(llm, "generate", broken)
     assert style.edit(draft, purpose="newsletter") is draft  # a failed edit keeps the draft
+
+
+def test_offline_offers_are_flagged():
+    from app.style import find_tropes
+
+    for text in ["I'll be checking it out after a shift. I'll check it out Friday.",
+                 "If it's a Portland machine I can have Kath check it for you.",
+                 "Happy to swing by the shop tomorrow."]:
+        assert any("real-world" in t for t in find_tropes(text)), text
+    assert not any("real-world" in t for t in find_tropes("Check the machine locator before you plan a trip."))
+    assert not any("real-world" in t for t in find_tropes("You'll have to check the locator first."))
