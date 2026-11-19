@@ -170,6 +170,7 @@ def generate(
     web_search: bool = False,
     max_searches: int = 3,
     web_fetch: bool = False,
+    max_fetches: int = 2,
     allowed_domains: Optional[list[str]] = None,
     critical: bool = False,
     fake: Optional[Callable[[], Any]] = None,
@@ -218,7 +219,7 @@ def generate(
     if web_fetch:
         # Fetches only URLs already in the conversation, from Anthropic's servers.
         tool_type = "web_fetch_20250910" if "haiku" in model else "web_fetch_20260209"
-        tools.append({"type": tool_type, "name": "web_fetch", "max_uses": 2})
+        tools.append({"type": tool_type, "name": "web_fetch", "max_uses": max_fetches})
     if tools:
         kwargs["tools"] = tools
 

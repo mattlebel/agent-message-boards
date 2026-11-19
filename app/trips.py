@@ -267,6 +267,9 @@ class _Pick(llm.Lenient):
 
 class _TaskResult(llm.Lenient):
     summary: str = Field(default="", description="2-4 plain sentences answering the request directly: the top pick and why")
+    plan: str = Field(default="", description=(
+        "For a route, schedule or itinerary request: the plan as short lines, one stop per line, in order, "
+        "with day and rough time (e.g. 'Sun 10:00 Guggenheim (walk-in, quick)'). Empty for a simple pick list."))
     picks: list[_Pick] = Field(default_factory=list)
 
 
@@ -299,9 +302,61 @@ def _trip_context(session: Session, trip: Trip) -> str:
     return "\n".join(lines)
 
 
+_STOP = {"Find", "Map", "Ideally", "Near", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+         "Saturday", "Want", "Something", "Make", "Plan", "Look", "What", "Which", "Where", "When", "With", "That",
+         "This", "There", "They", "Some", "Also", "Then", "Just", "Like", "Please", "Help", "Give"}
+_ALIASES = {"new york": ["new york", "nyc", "manhattan", "brooklyn", "queens", "bronx"],
+            "boston": ["boston", "cambridge", "back bay"], "chicago": ["chicago"], "london": ["london"]}
+
+
+def _search_terms(trip: Trip, text: str) -> list[str]:
+    terms: list[str] = []
+    dest = (trip.destination or "").lower()
+    for key, names in _ALIASES.items():
+        if key in dest:
+            terms += names
+    terms += [p.strip() for p in dest.split(",") if len(p.strip()) > 3]
+    import re
+
+    for words in re.findall(r"(?:[A-Z][\w'&]+(?:\s+(?:are|of|the|at)?\s*[A-Z0-9][\w'&]+)*)", f"{text}\n{trip.notes}"):
+        if words.split()[0] not in _STOP and len(words) > 3:
+            terms.append(words.lower())
+    return list(dict.fromkeys(terms))[:30]
+
+
+def board_knowledge(session: Session, trip: Trip, text: str, limit: int = 25) -> str:
+    """What the board already collected that bears on this trip (e.g. machine locations, events there)."""
+    from app.models import Item
+    from app.triage import item_brief
+
+    terms = _search_terms(trip, text)
+    if not terms:
+        return ""
+    since = utcnow() - timedelta(days=60)
+    hits = []
+    for it in session.scalars(select(Item).where(Item.fetched_at >= since)):
+        hay = f"{it.title}\n{it.body}".lower()
+        n = sum(1 for t in terms if t in hay)
+        if n:
+            hits.append((n, it.score or 0, it.fetched_at, it))
+    hits.sort(key=lambda h: (h[0], h[1], h[2]), reverse=True)
+    return "\n\n".join(item_brief(h[3], 500) for h in hits[:limit])
+
+
+def task_plan(task) -> str:
+    """The itinerary, for route/schedule tasks (kept as the first entry of picks)."""
+    return next((p["plan"] for p in task.picks or [] if "plan" in p), "")
+
+
+def task_picks(task) -> list[dict]:
+    return [p for p in task.picks or [] if "plan" not in p]
+
+
 def task_material(task) -> str:
     lines = [task.summary, ""]
-    for p in task.picks:
+    if task_plan(task):
+        lines += ["Plan:", task_plan(task), ""]
+    for p in task_picks(task):
         lines.append(f"- {p.get('name')}" + (f" ({p.get('where')})" if p.get("where") else "")
                      + (f", {p.get('when')}" if p.get("when") else "") + f": {p.get('why', '')}"
                      + (f" {p.get('url')}" if p.get("url") else ""))
@@ -319,27 +374,51 @@ def run_task(session: Session, task_id: int) -> None:
     trip = session.get(Trip, task.trip_id) if task else None
     if task is None or trip is None:
         return
+    # A redo replaces the earlier answer: its picks on the trip, and its board thread.
+    old = {p.get("name") for p in task_picks(task)}
+    if old:
+        for ti in session.scalars(select(TripItem).where(TripItem.trip_id == trip.id, TripItem.source == "task",
+                                                         TripItem.title.in_(old))):
+            session.delete(ti)
+    if task.thread_id:
+        old_thread = session.get(Thread, task.thread_id)
+        if old_thread is not None:
+            old_item = old_thread.item
+            session.delete(old_thread)
+            session.flush()
+            if old_item is not None:
+                session.delete(old_item)
+        task.thread_id = None
+    task.summary, task.picks = "", []
     task.status, task.error = "working", ""
     session.commit()
-    system = ("You research trip requests for one person, using web search (and fetching pages to check details). "
-              "Recommend only places and events you found and checked: open on the day asked, near where they're "
-              "staying when that matters, and a fit for what they said they liked. Give real links. Never put "
-              "people's names in search queries. Facts only; no hype. " + style.SELF_EDIT
-              + " Respond with JSON only.\n\nAbout the owner:\n" + profile_text(session))
-    user = (f"{_trip_context(session, trip)}\n\nToday is {today():%A %Y-%m-%d}.\n\nThe request:\n{task.text}\n\n"
-            "Find the best 3-6 options. "
-            'JSON: {"summary": "...", "picks": [{"name": "...", "kind": "idea|event", "why": "...", '
+    system = ("You do research and planning for one person's upcoming trip, like a sharp concierge. Use web search "
+              "a lot, and fetch the pages that settle the details: official sites, Resy/OpenTable listings, "
+              "museum and venue pages, recent news. Check what the request depends on (open on that day, the hours, "
+              "price range, lines and purchase limits, distance from where they're staying) for this year's dates. "
+              "Recommend only places and events you found. Give real links. Never put people's names in search "
+              "queries. Facts only; no hype. Don't describe your research or its limits; if one detail that matters "
+              "couldn't be confirmed, say so in a few words inside that pick (e.g. 'confirm Sunday hours'). "
+              + style.SELF_EDIT + " Respond with JSON only.\n\nAbout the owner:\n" + profile_text(session))
+    known = board_knowledge(session, trip, task.text)
+    user = (f"{_trip_context(session, trip)}\n\nToday is {today():%A %Y-%m-%d}.\n\n"
+            + (f"WHAT THE BOARD ALREADY KNOWS (recent items it collected; use these facts and links, and check "
+               f"them against current pages):\n{known}\n\n" if known else "")
+            + f"THE REQUEST:\n{task.text}\n\n"
+            "For a list of options, give the best 3-6. For a route or schedule, cover every stop they listed and "
+            "put the order in plan. "
+            'JSON: {"summary": "...", "plan": "...", "picks": [{"name": "...", "kind": "idea|event", "why": "...", '
             '"where": "...", "when": "...", "url": "..."}]}')
     try:
         res = llm.generate(
-            purpose="trip_task", role="search", system=system, user=user, max_tokens=6000, effort="medium",
-            schema=_TaskResult, web_search=True, max_searches=8, web_fetch=True, critical=True,
+            purpose="trip_task", role="tasks", system=system, user=user, max_tokens=12000, effort="high",
+            schema=_TaskResult, web_search=True, max_searches=20, web_fetch=True, max_fetches=12, critical=True,
             fake=lambda: _TaskResult(summary="(fake) Two good options near the hotel.",
                                      picks=[_Pick(name="Fake Bistro", why="Like the places you listed.",
                                                   url="https://example.com/bistro")]),
         )
-        result = style.polish(res.parsed, purpose="trip_task", role="search", system=system, user=user,
-                              critical=True, max_tokens=6000)
+        result = style.polish(res.parsed, purpose="trip_task", role="tasks", system=system, user=user,
+                              critical=True, max_tokens=12000)
     except (llm.LlmError, llm.BudgetExceeded) as e:
         log.exception("trip task %s failed", task_id)
         session.rollback()
@@ -349,8 +428,10 @@ def run_task(session: Session, task_id: int) -> None:
         return
 
     task.summary = result.summary
-    task.picks = [p.model_dump() for p in result.picks[:8] if p.name]
-    for p in result.picks[:8]:
+    task.picks = [p.model_dump() for p in result.picks[:10] if p.name]
+    if result.plan.strip():
+        task.picks = [{"plan": result.plan.strip()}] + task.picks  # stored with the picks (no extra column)
+    for p in result.picks[:10]:
         if not p.name:
             continue
         session.add(TripItem(trip_id=trip.id, kind="event" if p.kind == "event" else "idea", title=p.name[:500],
@@ -359,7 +440,7 @@ def run_task(session: Session, task_id: int) -> None:
                              source="task",
                              newsletter_id=0))  # 0 = covered by the task's own thread, not "Upcoming trips"
     topic = ensure_task_topic(session)
-    item = Item(topic_id=topic.id, dedupe_key=dedupe_key(f"trip-task:{task.id}"),
+    item = Item(topic_id=topic.id, dedupe_key=dedupe_key(f"trip-task:{task.id}:{utcnow().isoformat()}"),
                 title=f"{trip.name}: {task.text[:200]}",
                 body=(f"{_trip_context(session, trip)}\n\nResearch for the owner's request:\n{task_material(task)}")[:6000],
                 status="discussed", extra={"source_name": f"Trip task for {trip.name}", "source_kind": "trip_task"})

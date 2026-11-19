@@ -831,7 +831,7 @@ def trip_page(request: Request, trip_id: int, user=Depends(require_user), sessio
         wanted = [trip.destination] + [p.strip() for p in trip.destination.split(",") if p.strip()]
         reviews = [i for i in session.scalars(select(Item)) if travel.is_omaat(i) and travel.matched_regions(i, wanted)][:12]
     return render(request, "trip.html", trip=trip, items=trips.items_for(session, trip), reviews=reviews,
-                  tasks=trips.tasks_for(session, trip),
+                  tasks=trips.tasks_for(session, trip), task_plan=trips.task_plan, task_picks=trips.task_picks,
                   countdown=trips.countdown, when_label=trips.when_label, kind_labels=trips.KIND_LABELS,
                   nav="trips")
 

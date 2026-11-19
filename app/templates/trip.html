@@ -25,13 +25,18 @@
   <form method="post" action="/trip-tasks/{{ t.id }}/retry"><button class="outline secondary" type="submit">Try again</button></form>
   {% else %}
   {% if t.summary %}<p class="small">{{ t.summary }}</p>{% endif %}
+  {% set plan = task_plan(t) %}
+  {% if plan %}<pre class="small" style="white-space: pre-wrap; margin-bottom:.6rem;">{{ plan }}</pre>{% endif %}
   <ul class="small">
-    {% for p in t.picks %}
+    {% for p in task_picks(t) %}
     <li>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener"><b>{{ p.name }}</b></a>{% else %}<b>{{ p.name }}</b>{% endif %}{% if p.where %} <span class="muted">· {{ p.where }}</span>{% endif %}{% if p.when %} <span class="muted">· {{ p.when }}</span>{% endif %}
       {% if p.why %}<div class="muted">{{ p.why }}</div>{% endif %}</li>
     {% endfor %}
   </ul>
-  {% if t.thread_id %}<p class="small"><a href="/t/{{ t.thread_id }}">What the board says →</a></p>{% endif %}
+  <div class="btn-row">
+    {% if t.thread_id %}<a class="small" href="/t/{{ t.thread_id }}">What the board says →</a>{% endif %}
+    <form method="post" action="/trip-tasks/{{ t.id }}/retry"><button class="outline secondary" type="submit" title="Research it again from scratch">Redo</button></form>
+  </div>
   {% endif %}
   {% endfor %}
 </article>
