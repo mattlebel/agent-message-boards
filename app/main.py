@@ -32,7 +32,7 @@ from app.db import get_session, init_db, session_scope, utcnow
 from app.inbound import process_inbound, record_webhook_event
 from app.models import (
     Agent, Feedback, InboundEmail, Item, JobRun, LlmCall, Newsletter, Post, ReadingItem, Source, Thread, Topic,
-    Race, RaceDate, Trip, TripItem, WalletCard,
+    Race, RaceDate, Trip, TripItem, TripTask, WalletCard,
     TopicSuggestion, YoutubeChannel,
 )
 from app.seed import run_migrations, seed
@@ -831,6 +831,7 @@ def trip_page(request: Request, trip_id: int, user=Depends(require_user), sessio
         wanted = [trip.destination] + [p.strip() for p in trip.destination.split(",") if p.strip()]
         reviews = [i for i in session.scalars(select(Item)) if travel.is_omaat(i) and travel.matched_regions(i, wanted)][:12]
     return render(request, "trip.html", trip=trip, items=trips.items_for(session, trip), reviews=reviews,
+                  tasks=trips.tasks_for(session, trip),
                   countdown=trips.countdown, when_label=trips.when_label, kind_labels=trips.KIND_LABELS,
                   nav="trips")
 
@@ -856,6 +857,31 @@ def trip_research_now(request: Request, background: BackgroundTasks, trip_id: in
     return back(f"/trips/{trip_id}")
 
 
+@app.post("/trips/{trip_id}/task")
+def trip_task(request: Request, background: BackgroundTasks, trip_id: int, text: str = Form(...),
+              user=Depends(require_user), session: Session = Depends(get_session)):
+    if session.get(Trip, trip_id) is None or not text.strip():
+        raise HTTPException(400)
+    task = TripTask(trip_id=trip_id, text=text.strip()[:4000])
+    session.add(task)
+    session.commit()
+    background.add_task(run_bg, trips.run_task, task.id)
+    flash(request, "The board is on it. Research takes a minute or two; this page refreshes itself.")
+    return back(f"/trips/{trip_id}#tasks")
+
+
+@app.post("/trip-tasks/{task_id}/retry")
+def trip_task_retry(background: BackgroundTasks, task_id: int, user=Depends(require_user),
+                    session: Session = Depends(get_session)):
+    task = session.get(TripTask, task_id)
+    if task is None:
+        raise HTTPException(404)
+    task.status, task.error = "working", ""
+    session.commit()
+    background.add_task(run_bg, trips.run_task, task.id)
+    return back(f"/trips/{task.trip_id}#tasks")
+
+
 @app.post("/trips/{trip_id}/note")
 def trip_note(trip_id: int, title: str = Form(...), url: str = Form(""), user=Depends(require_user),
               session: Session = Depends(get_session)):
@@ -871,6 +897,8 @@ def trip_delete(request: Request, trip_id: int, user=Depends(require_user), sess
     if trip:
         for it in session.scalars(select(TripItem).where(TripItem.trip_id == trip_id)):
             session.delete(it)
+        for task in session.scalars(select(TripTask).where(TripTask.trip_id == trip_id)):
+            session.delete(task)  # their board threads stay on the board
         session.delete(trip)
         session.commit()
         flash(request, f"Deleted {trip.name}.")

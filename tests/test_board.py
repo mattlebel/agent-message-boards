@@ -91,3 +91,25 @@ def test_cast_of_four():
             a.active = True  # leave the shared DB as other tests expect
         for a in added:
             s.delete(a)
+
+
+def test_no_trip_suggestions_migration():
+    from app.seed import _no_trip_suggestions
+
+    init_db()
+    with session_scope() as s:
+        before = settings_store.get(s, "profile")
+        settings_store.set(s, "profile", "I collect prints.\r\nthe moment they're announced. I'll travel the same week if "
+                                         "it's within a 2-3 hour flight or a\r\n4-5 hour train ride or drive from Boston.\r\nI like travel.")
+        t, created = _topic(s, "inciardi")
+        old_criteria = t.urgent_criteria
+        t.urgent_criteria = ("A NEW machine that just went live. Alert especially when it's reachable from Boston within a "
+                             "2-3 hour flight (roughly: all of New England, the Southeast coast). A machine closing soon.")
+        note = _no_trip_suggestions(s)
+        assert "profile" in note and "Inciardi" in note
+        assert "Don't suggest trips" in settings_store.get(s, "profile")
+        assert "reachable" not in t.urgent_criteria and "never suggest" in t.urgent_criteria
+        settings_store.set(s, "profile", before)
+        t.urgent_criteria = old_criteria
+        if created:
+            s.delete(t)

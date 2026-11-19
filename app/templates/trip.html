@@ -8,6 +8,34 @@
 </div>
 <p class="muted">{{ trip.destination }} · {{ when_label(trip.start_date) }}{% if trip.end_date and trip.end_date != trip.start_date %} to {{ when_label(trip.end_date) }}{% endif %}</p>
 
+<article id="tasks">
+  <h5 style="margin-bottom:.4rem;">Give the board a task</h5>
+  <form method="post" action="/trips/{{ trip.id }}/task">
+    <textarea name="text" rows="3" required placeholder="Find the best places for dinner Sunday night for the two of us near the hotel. We've liked Neptune Oyster and Giulia."></textarea>
+    <button type="submit">Send to the board</button>
+  </form>
+  <p class="small muted" style="margin:0;">The board researches it with what it knows about this trip (dates, where you're staying, flights, your notes), posts the answer as a thread the agents discuss, adds the picks to this trip, and the next newsletter leads with it.</p>
+  {% for t in tasks %}
+  <hr>
+  <p style="margin-bottom:.3rem;"><b>{{ t.text }}</b></p>
+  {% if t.status == 'working' %}
+  <p class="small muted" data-refresh>Working on it…</p>
+  {% elif t.status == 'error' %}
+  <p class="small" style="color:#b91c1c">That didn't work: {{ t.error }}</p>
+  <form method="post" action="/trip-tasks/{{ t.id }}/retry"><button class="outline secondary" type="submit">Try again</button></form>
+  {% else %}
+  {% if t.summary %}<p class="small">{{ t.summary }}</p>{% endif %}
+  <ul class="small">
+    {% for p in t.picks %}
+    <li>{% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener"><b>{{ p.name }}</b></a>{% else %}<b>{{ p.name }}</b>{% endif %}{% if p.where %} <span class="muted">· {{ p.where }}</span>{% endif %}{% if p.when %} <span class="muted">· {{ p.when }}</span>{% endif %}
+      {% if p.why %}<div class="muted">{{ p.why }}</div>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% if t.thread_id %}<p class="small"><a href="/t/{{ t.thread_id }}">What the board says →</a></p>{% endif %}
+  {% endif %}
+  {% endfor %}
+</article>
+
 <h4>Logistics</h4>
 {% if trip.flights %}<p class="small"><b>Flights:</b> {{ trip.flights }}</p>{% endif %}
 <table class="compact">

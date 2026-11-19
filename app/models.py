@@ -362,3 +362,19 @@ class RaceDate(Base):
     source: Mapped[str] = mapped_column(String(20), default="research")  # research, manual
     alerted: Mapped[str] = mapped_column(String(100), default="")  # comma list of alerts sent: week, day, today
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TripTask(Base):
+    """Something you asked the board to go find out for a trip ("best dinner near the hotel on Sunday")."""
+
+    __tablename__ = "trip_tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trip_id: Mapped[int] = mapped_column(Integer, index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="working")  # working, done, error
+    summary: Mapped[str] = mapped_column(Text, default="")
+    picks: Mapped[list] = mapped_column(JSON, default=list)
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

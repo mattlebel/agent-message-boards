@@ -86,6 +86,7 @@ Your notes from when you created yourself:
 About the board: it exists for its owner, {owner} (shown as @owner). {owner} reads every thread and sometimes posts.
 About {owner}:
 {profile}
+{_planned(session)}
 
 How to post:
 - Stay in character. Write like a real person on a forum, not an assistant. No "As an AI", no sign-offs.
@@ -100,8 +101,11 @@ How to post:
   (no friends, relatives, coworkers or contacts doing errands), and never describe plans or things you did offline
   ("I'll check it out after my shift", "I swung by the machine", "my sister in Portland can look"). Your backstory
   shapes your opinions; it isn't a source of new events or people.
-- Only address @owner when there's a concrete action for {owner} (sign up by a date, a deal worth taking, a trip
-  worth making). Mention other members as @handle when you respond to them.
+- Only address @owner when there's a concrete action for {owner} (sign up by a date, a deal worth taking).
+  Mention other members as @handle when you respond to them.
+- Never suggest that {owner} travel somewhere or plan a trip (to a machine, a pop-up, an event) or say they "have
+  time" to go. {owner} decides that. A drop somewhere else is news: say where it is and stop. The one exception is
+  a city {owner} already has a trip planned to (listed below), where a drop is worth pointing out.
 - Plain text, light markdown at most. Emoji only if it fits how you write.
 - {style.SELF_EDIT}
 
@@ -109,6 +113,14 @@ Writing rules (these apply to every post):
 {style.guide(session)}
 
 {steering}""".strip()
+
+
+def _planned(session: Session) -> str:
+    from app import trips
+
+    plans = [trips.describe(t) for t in trips.upcoming(session)]
+    return ("Trips the owner has planned (the only trips to mention):\n" + "\n".join(f"- {p}" for p in plans)
+            if plans else "The owner has no trips planned.")
 
 
 def render_thread(thread: Thread, limit_chars: int = 9000) -> str:
@@ -222,7 +234,8 @@ def start_thread(session: Session, item: Item, critical: bool = False, alert: bo
     today = datetime.now(config.TZ).strftime("%A %B %d, %Y")
     user = (
         f"Today is {today}. Start a new thread in the '{topic.name}' section about this:\n\n{_material(item)}\n\n"
-        + ("This is URGENT: a new drop/announcement the owner may want to travel for. Make that clear.\n" if alert else "")
+        + ("This is URGENT: a new drop or announcement. Say what it is and where, plainly. Don't suggest a trip.\n"
+           if alert else "")
         + ("This is the twice-daily eBay digest. Don't repeat the list. Point out what stands out (the top "
            "prices, collabs or venue exclusives, anything unusual) and what it means for @owner as a "
            "collector. It's a sample of eBay, not everything listed, so make no claims about rarity or "
@@ -371,7 +384,8 @@ def alert_thread(session: Session, item: Item, decision: AlertDecision) -> Threa
     thread = start_thread(session, item, critical=True, alert=True)
     try:
         add_reply(session, thread, critical=True,
-                  nudge="This is a time-sensitive drop. Weigh in on whether @owner should go and how.")
+                  nudge="This is a time-sensitive drop. Add what matters about it (how rare, how long it runs, "
+                        "resale), if the material supports it. Don't suggest a trip.")
     except Exception:
         log.exception("alert reply failed")
     return thread

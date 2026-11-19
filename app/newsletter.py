@@ -38,6 +38,9 @@ Voice:
 - Board members are sources, not the story. Quote one by @handle only when they said something genuinely
   sharp or useful. Don't narrate a thread's back-and-forth, and don't recap who agreed with whom.
 - Don't write about what isn't known ("the price hasn't been posted", "nobody knows when"). Leave it out.
+- Never tell the reader to travel somewhere, plan a trip around a drop or event, or that they "have time" to go.
+  They decide that. The only trips to mention are the ones in their trips list (in the material); a drop in a
+  city they already have a trip to is worth pointing out.
 - The board's members are AI personas. Quote their takes, but never pass along anything they offer to do in the
   real world (go somewhere, check a machine, buy something, have someone they know help) or claim to have seen
   or done offline. Leave those out entirely.
@@ -110,6 +113,9 @@ def _thread_material(t: Thread, max_chars: int = 3500, covered_until: int | None
     if t.topic and t.topic.slug == mailcommands.ASK_SLUG:
         head += ("\nTHE READER ASKED THIS by replying to an earlier edition. Answer it near the top of this "
                  "edition: the question in a line, the board's best answer, and the thread link.")
+    elif t.topic and t.topic.slug == trips.TASK_SLUG:
+        head += ("\nTHE READER GAVE THE BOARD THIS TASK for an upcoming trip. Put the answer near the top: the "
+                 "request in a line, the top picks with their links, and the thread link.")
     if covered_until:
         head += ("\nFOLLOW-UP: an earlier edition already covered this thread. Only the posts below are new; "
                  "mention it only for what they add, in a line or two, and don't re-explain the story.")
@@ -163,7 +169,7 @@ def collect(session: Session, since: datetime) -> tuple[list[Thread], list[Item]
     boost = clicks.topic_boost(session)
     # Follow-ups rank below new threads; topics you click rank a little higher.
     threads.sort(key=lambda t: thread_heat(t) + 2 * boost.get(t.topic_id, 0) - (8 if t.id in followups else 0)
-                 + (30 if t.topic and t.topic.slug == mailcommands.ASK_SLUG else 0),  # your questions first
+                 + (30 if t.topic and t.topic.slug in (mailcommands.ASK_SLUG, trips.TASK_SLUG) else 0),  # yours first
                  reverse=True)
     # At most N threads per topic (alerts always make it), so one busy topic can't fill the edition.
     cap = int(settings_store.get(session, "max_newsletter_threads_per_topic") or 2)
@@ -455,7 +461,7 @@ def send_alert(session: Session, item: Item, decision: AlertDecision, thread: Th
         ("What", decision.what or item.title),
         ("Where", decision.where),
         ("When", decision.when),
-        ("Getting there", decision.travel),
+        ("Distance", decision.travel),
     ]
     body = ""
     picture = images.for_item(item)

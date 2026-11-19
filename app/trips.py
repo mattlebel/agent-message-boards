@@ -249,3 +249,136 @@ def newsletter_material(session: Session, trips: list[Trip], fresh: list[TripIte
                 for i in new)
         parts.append(block)
     return "\n\n".join(parts)
+
+
+# --- tasks: "go find out X for this trip" -----------------------------------------------------------
+
+TASK_SLUG = "trip-tasks"
+
+
+class _Pick(llm.Lenient):
+    name: str = ""
+    kind: str = Field(default="idea", description="idea, or event if it happens at a set time")
+    why: str = Field(default="", description="One or two plain sentences: why it fits this request and these people")
+    where: str = Field(default="", description="Neighborhood or address, and how far from where they're staying if known")
+    when: str = Field(default="", description="YYYY-MM-DD for an event, or opening hours that matter for the request")
+    url: str = Field(default="", description="Official site or booking page")
+
+
+class _TaskResult(llm.Lenient):
+    summary: str = Field(default="", description="2-4 plain sentences answering the request directly: the top pick and why")
+    picks: list[_Pick] = Field(default_factory=list)
+
+
+def ensure_task_topic(session: Session):
+    from app.models import Topic
+
+    topic = session.scalar(select(Topic).where(Topic.slug == TASK_SLUG))
+    if topic is None:
+        topic = Topic(slug=TASK_SLUG, name="Trip tasks", priority=5,
+                      description="Things the owner asked the board to find out for an upcoming trip. Answer the "
+                                  "request using the research in the material; add only what it supports.")
+        session.add(topic)
+        session.flush()
+    return topic
+
+
+def _trip_context(session: Session, trip: Trip) -> str:
+    end = trip.end_date or trip.start_date
+    lines = [f"Trip: {describe(trip)}."]
+    if trip.start_date:
+        lines.append(f"Dates: {trip.start_date:%A %Y-%m-%d} to {end:%A %Y-%m-%d}.")
+    items = items_for(session, trip)
+    if trip.flights:
+        lines.append(f"Flights: {trip.flights}")
+    for b in items["bookings"]:
+        lines.append(f"{KIND_LABELS[b.kind]}: {b.title}" + (f" ({when_label(b.starts_at)})" if b.starts_at else "")
+                     + (f". {b.details}" if b.details else ""))
+    if trip.notes:
+        lines.append(f"The owner's notes for this trip: {trip.notes}")
+    return "\n".join(lines)
+
+
+def task_material(task) -> str:
+    lines = [task.summary, ""]
+    for p in task.picks:
+        lines.append(f"- {p.get('name')}" + (f" ({p.get('where')})" if p.get("where") else "")
+                     + (f", {p.get('when')}" if p.get("when") else "") + f": {p.get('why', '')}"
+                     + (f" {p.get('url')}" if p.get("url") else ""))
+    return "\n".join(lines).strip()
+
+
+def run_task(session: Session, task_id: int) -> None:
+    """Research the task with web search, save the picks to the trip, and open a board thread on it."""
+    from app import discussion
+    from app.models import Item, Post, Thread, TripTask
+    from app.sources.base import dedupe_key
+    from app.wallet import profile_text
+
+    task = session.get(TripTask, task_id)
+    trip = session.get(Trip, task.trip_id) if task else None
+    if task is None or trip is None:
+        return
+    task.status, task.error = "working", ""
+    session.commit()
+    system = ("You research trip requests for one person, using web search (and fetching pages to check details). "
+              "Recommend only places and events you found and checked: open on the day asked, near where they're "
+              "staying when that matters, and a fit for what they said they liked. Give real links. Never put "
+              "people's names in search queries. Facts only; no hype. " + style.SELF_EDIT
+              + " Respond with JSON only.\n\nAbout the owner:\n" + profile_text(session))
+    user = (f"{_trip_context(session, trip)}\n\nToday is {today():%A %Y-%m-%d}.\n\nThe request:\n{task.text}\n\n"
+            "Find the best 3-6 options. "
+            'JSON: {"summary": "...", "picks": [{"name": "...", "kind": "idea|event", "why": "...", '
+            '"where": "...", "when": "...", "url": "..."}]}')
+    try:
+        res = llm.generate(
+            purpose="trip_task", role="search", system=system, user=user, max_tokens=6000, effort="medium",
+            schema=_TaskResult, web_search=True, max_searches=8, web_fetch=True, critical=True,
+            fake=lambda: _TaskResult(summary="(fake) Two good options near the hotel.",
+                                     picks=[_Pick(name="Fake Bistro", why="Like the places you listed.",
+                                                  url="https://example.com/bistro")]),
+        )
+        result = style.polish(res.parsed, purpose="trip_task", role="search", system=system, user=user,
+                              critical=True, max_tokens=6000)
+    except (llm.LlmError, llm.BudgetExceeded) as e:
+        log.exception("trip task %s failed", task_id)
+        session.rollback()
+        task = session.get(TripTask, task_id)
+        task.status, task.error, task.finished_at = "error", str(e)[:500], utcnow()
+        session.commit()
+        return
+
+    task.summary = result.summary
+    task.picks = [p.model_dump() for p in result.picks[:8] if p.name]
+    for p in result.picks[:8]:
+        if not p.name:
+            continue
+        session.add(TripItem(trip_id=trip.id, kind="event" if p.kind == "event" else "idea", title=p.name[:500],
+                             details=" · ".join(x for x in (p.where, p.why) if x)[:1000],
+                             url=p.url if p.url.startswith("http") else "", starts_at=_parse_when(p.when),
+                             source="task",
+                             newsletter_id=0))  # 0 = covered by the task's own thread, not "Upcoming trips"
+    topic = ensure_task_topic(session)
+    item = Item(topic_id=topic.id, dedupe_key=dedupe_key(f"trip-task:{task.id}"),
+                title=f"{trip.name}: {task.text[:200]}",
+                body=(f"{_trip_context(session, trip)}\n\nResearch for the owner's request:\n{task_material(task)}")[:6000],
+                status="discussed", extra={"source_name": f"Trip task for {trip.name}", "source_kind": "trip_task"})
+    session.add(item)
+    session.flush()
+    first = next((ln.strip() for ln in task.text.splitlines() if ln.strip()), "Trip task")
+    title = f"{trip.name}: " + (first if len(first) <= 80 else first[:77].rsplit(" ", 1)[0] + "…")
+    thread = Thread(topic_id=topic.id, item_id=item.id, title=title[:200], by_user=True)
+    session.add(thread)
+    session.flush()
+    thread.posts.append(Post(agent_id=None, body=task.text[:6000]))
+    thread.last_activity_at = utcnow()
+    task.thread_id = thread.id
+    task.status, task.finished_at = "done", utcnow()
+    session.commit()
+    discussion.respond_to_owner(session, thread.id)
+
+
+def tasks_for(session: Session, trip: Trip) -> list:
+    from app.models import TripTask
+
+    return list(session.scalars(select(TripTask).where(TripTask.trip_id == trip.id).order_by(TripTask.id.desc())))

@@ -207,11 +207,21 @@ class AlertDecision(BaseModel):
     what: str = Field(default="", description="What dropped / was announced, factually")
     where: str = Field(default="", description="Location (venue, city) if known")
     when: str = Field(default="", description="Dates / how long it's available, if known")
-    travel: str = Field(default="", description="How far from Back Bay Boston and whether it's a realistic same-week trip")
+    travel: str = Field(default="", description=(
+        "Distance from Back Bay, Boston, as a plain fact (e.g. 'about 50 miles; Providence'). No advice about "
+        "going, unless the owner already has a trip planned there, then say so."))
 
 
 class _AlertDecisions(BaseModel):
     decisions: list[AlertDecision]
+
+
+def _planned_trips(session: Session) -> str:
+    from app import trips
+
+    plans = [trips.describe(t) for t in trips.upcoming(session)]
+    return ("\n\nTrips the owner has planned (the only trips to mention):\n" + "\n".join(f"- {p}" for p in plans)
+            if plans else "\n\nThe owner has no trips planned.")
 
 
 def pending_urgent(session: Session) -> list[Item]:
@@ -246,7 +256,8 @@ def check_urgent(session: Session, items: list[Item]) -> list[tuple[Item, AlertD
             "You decide whether incoming items are urgent enough to email the owner right now. "
             "Only say yes for genuinely new, time-sensitive things that match the alert criteria. "
             "Routine posts, resales of common items, and old news are not alerts. "
-            "For travel, assume the owner leaves from Back Bay, Boston.\n\nAbout the owner:\n" + profile
+            "Never suggest the owner travel to a drop; they decide that.\n\nAbout the owner:\n" + profile
+            + _planned_trips(session)
         )
         user = (
             f"Today is {datetime.now(config.TZ):%A %B %d, %Y}.\nTopic: {topic.name}\n"

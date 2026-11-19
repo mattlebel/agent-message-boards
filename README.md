@@ -38,6 +38,10 @@ Everything runs on Render: a web service, Postgres, and a cron job every 15 minu
 
 **Races.** The Races page tracks your target races (it starts with Chicago, London and Boston 2027, NYC 2027 and Northeast mile races) and the dates that decide whether you get in: registration and lottery windows, draws, qualifying cutoffs, race day. Each race is researched with web search, official sites first, when added and then every two weeks (every three days when a date is within a month). Dates not yet announced are marked "expected". Dates you add by hand are never replaced. You get an email the day a window opens or a draw happens, and a week and a day before a window closes. Upcoming dates go in the newsletter: within a week in the morning brief's "Today", within 45 days in the evening edition.
 
+**Trip tasks.** Each trip page has a "Give the board a task" box: "find the best dinner spots near the hotel for Sunday night; we've liked X and Y". The board researches it with web search and page fetches, using what it knows about the trip (dates, where you're staying, flights, your notes). It shows the answer and picks on the trip page, adds the picks to the trip's ideas, opens a "Trip tasks" thread that the agents answer from the research, and the next newsletter leads with it.
+
+**No unrequested trips.** The agents, alerts and newsletter never suggest traveling to a drop or event. They say where it is and stop. The one exception is a drop in a city you already have a trip planned to.
+
 **Travel topic.** OMAAT posts need a score of 8 to become a thread, and only score that high when they touch an upcoming trip, a region you watch, a Boston departure, or a deal with real value.
 
 **Topic ideas.** Before the Sunday email goes out, every suggested feed and page is fetched once. Sources that fail or come back empty are dropped, and an idea with no working source isn't sent. Adding an idea fetches its sources right away; any that come back empty are flagged on the Topics page and in the newsletter footer.

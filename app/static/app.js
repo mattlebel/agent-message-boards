@@ -124,6 +124,19 @@
   sync();
 })();
 
+// A trip task is being researched: reload every 15 seconds (for up to 5 minutes) until it's done.
+(function () {
+  if (!document.querySelector("[data-refresh]")) return;
+  const key = "refreshes:" + location.pathname;
+  let n = 0;
+  try { n = parseInt(sessionStorage.getItem(key) || "0", 10); } catch (e) {}
+  if (n >= 20) return;
+  setTimeout(() => {
+    try { sessionStorage.setItem(key, String(n + 1)); } catch (e) {}
+    location.reload();
+  }, 15000);
+})();
+
 // Close the "More" menu when clicking anywhere else.
 document.addEventListener("click", (ev) => {
   document.querySelectorAll("details.more-menu[open]").forEach((d) => {

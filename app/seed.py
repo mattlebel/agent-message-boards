@@ -21,9 +21,8 @@ TOPICS = [
         ),
         "urgent_criteria": (
             "A NEW machine location, a limited-time or temporary machine, a pop-up, or a special/limited "
-            "edition that was just announced or just went live. Alert especially when it's reachable from "
-            "Boston within a 2-3 hour flight or a 4-5 hour train ride or drive (roughly: all of New England, "
-            "NYC, Philly, DC, Montreal, Toronto, Chicago, the Southeast coast). A machine that is closing "
+            "edition that was just announced or just went live, anywhere. Say where it is as a plain fact; "
+            "never suggest the owner travel to it. A machine that is closing "
             "soon is also worth an alert. An eBay 'first sighting' of a design never seen before counts if it "
             "looks like a genuinely new print or venue exclusive (not just an old print we hadn't catalogued)."
         ),
@@ -316,6 +315,33 @@ def _default_races(session: Session) -> str:
     return f"added {races.seed_defaults(session)} races"
 
 
+def _no_trip_suggestions(session: Session) -> str:
+    """The owner doesn't want trips suggested for drops. Rewrite the profile line and the Inciardi alert
+    rule that invited it (only if they still read the way they were seeded)."""
+    import re
+
+    from app import settings_store
+
+    done = []
+    profile = settings_store.get(session, "profile") or ""
+    new = re.sub(r"I'll travel the same week if it's within a 2-3 hour flight or a\s+4-5 hour train ride or drive "
+                 r"from Boston\.",
+                 "Don't suggest trips to go get prints; I decide that myself. A drop in a\ncity I already have a "
+                 "trip planned to is worth pointing out.", profile)
+    if new != profile:
+        settings_store.set(session, "profile", new)
+        done.append("profile")
+    topic = session.scalar(select(Topic).where(Topic.slug == "inciardi"))
+    if topic is not None and "reachable from Boston" in (topic.urgent_criteria or ""):
+        topic.urgent_criteria = re.sub(
+            r"Alert especially when it's reachable from Boston.*?Southeast coast\)\.",
+            "Say where it is as a plain fact; never suggest the owner travel to it.",
+            topic.urgent_criteria, flags=re.S)
+        topic.urgent_criteria = topic.urgent_criteria.replace("just went live. Say", "just went live, anywhere. Say")
+        done.append("Inciardi alert rule")
+    return "rewrote " + (", ".join(done) or "nothing (already edited)")
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -326,6 +352,7 @@ MIGRATIONS = [
     ("2026-11-17-cast-of-four", _cast_of_four),
     ("2026-11-17-drop-reddit-sources", _drop_reddit_sources),
     ("2026-11-17-default-races", _default_races),
+    ("2026-11-19-no-trip-suggestions", _no_trip_suggestions),
 ]
 
 

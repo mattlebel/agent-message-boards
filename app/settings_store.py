@@ -15,8 +15,8 @@ I love mile races and I'm more competitive at the mile than at longer distances.
 For run clubs I care about very local Back Bay stuff (e.g. the Dick's Sporting Goods run club,
 Tracksmith group runs on Newbury Street), not every club in Greater Boston.
 I collect Inciardi mini prints. I want to know about new machines, limited-time machines and pop-ups
-the moment they're announced. I'll travel the same week if it's within a 2-3 hour flight or a
-4-5 hour train ride or drive from Boston.
+the moment they're announced. Don't suggest trips to go get prints; I decide that myself. A drop in a
+city I already have a trip planned to is worth pointing out.
 I like travel (points, miles, premium cabins, hotel deals) and card offers (AmEx).
 """
 
