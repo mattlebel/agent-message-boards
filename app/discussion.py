@@ -384,8 +384,8 @@ def alert_thread(session: Session, item: Item, decision: AlertDecision) -> Threa
     thread = start_thread(session, item, critical=True, alert=True)
     try:
         add_reply(session, thread, critical=True,
-                  nudge="This is a time-sensitive drop. Add what matters about it (how rare, how long it runs, "
-                        "resale), if the material supports it. Don't suggest a trip.")
+                  nudge="This is a time-sensitive drop. Add what matters about it (how rare, how long it runs), "
+                        "if the material supports it. Don't suggest a trip.")
     except Exception:
         log.exception("alert reply failed")
     return thread

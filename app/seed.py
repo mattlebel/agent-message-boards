@@ -14,7 +14,7 @@ TOPICS = [
         "description": (
             "Inciardi Prints: Ana Inciardi's $1 linocut mini print vending machines (studio in Portland, ME). "
             "Care about: new machine locations, limited-time machines, pop-ups, special editions and collabs, "
-            "which prints are rare / exclusive / out of circulation (OOC), and resale prices on eBay and Depop. "
+            "and which prints are rare / exclusive / out of circulation (OOC). Leave out resale listings and prices. "
             "Exclusives usually come from collabs and venues (e.g. Only NY's 8-print set, the Whitney's limited "
             "edition, the Richard Scarry series, seasonal runs). @inciardimachines on Instagram tracks locations. "
             "Ignore rehashed press about the origin story."
@@ -23,15 +23,12 @@ TOPICS = [
             "A NEW machine location, a limited-time or temporary machine, a pop-up, or a special/limited "
             "edition that was just announced or just went live, anywhere. Say where it is as a plain fact; "
             "never suggest the owner travel to it. A machine that is closing "
-            "soon is also worth an alert. An eBay 'first sighting' of a design never seen before counts if it "
-            "looks like a genuinely new print or venue exclusive (not just an old print we hadn't catalogued)."
+            "soon is also worth an alert."
         ),
         "sources": [
             {"kind": "page_watch", "name": "inciardiprints.com home", "config": {"url": "https://inciardiprints.com/"}, "interval_minutes": 30},
             {"kind": "sitemap", "name": "inciardiprints.com new pages", "config": {"url": "https://inciardiprints.com/sitemap.xml"}, "interval_minutes": 60},
             {"kind": "shopify", "name": "Inciardi shop products", "config": {"url": "https://inciardiprints.com"}, "interval_minutes": 60},
-            {"kind": "page_watch", "name": "miniprint.io home", "config": {"url": "https://miniprint.io/"}, "interval_minutes": 30},
-            {"kind": "sitemap", "name": "miniprint.io new pages", "config": {"url": "https://miniprint.io/sitemap.xml"}, "interval_minutes": 60},
             {"kind": "websearch", "name": "Venue announcements and pop-ups", "interval_minutes": 360, "config": {
                 "query": "Inciardi mini print vending machine: new host locations, limited-time machines, pop-ups, collab or venue-exclusive print series",
                 "instructions": "Look for museums, bookstores, cafes, shops and events announcing a machine or exclusive prints, "
@@ -41,12 +38,6 @@ TOPICS = [
                 "query": "Inciardi mini prints collectors: new prints pulled, rare finds, trades, machine restocks",
                 "domains": "instagram.com, tiktok.com",
                 "days": 5}},
-            {"kind": "ebay", "name": "eBay sales and new listings", "interval_minutes": 30, "config": {
-                "query": "inciardi print", "min_sale_price": 10}},
-            {"kind": "websearch", "name": "Depop / Mercari / Etsy resale", "interval_minutes": 4320, "config": {
-                "query": "Inciardi mini print listings for sale, especially rare, custom, exclusive or collab prints, with prices",
-                "domains": "depop.com, mercari.com, etsy.com, poshmark.com",
-                "days": 14, "max_results": 8}},
         ],
     },
     {
@@ -342,6 +333,37 @@ def _no_trip_suggestions(session: Session) -> str:
     return "rewrote " + (", ".join(done) or "nothing (already edited)")
 
 
+def _drop_listings_and_miniprint(session: Session) -> str:
+    """The owner no longer wants eBay/resale listings or miniprint.io lookups. Remove those sources, skip
+    their unprocessed items, and take resale out of the Inciardi brief."""
+    import re
+
+    from app.models import Item
+
+    def unwanted(src: Source) -> bool:
+        cfg = str(src.config or {})
+        return (src.kind == "ebay" or "miniprint.io" in cfg
+                or (src.kind == "websearch" and "depop.com" in str((src.config or {}).get("domains", ""))))
+
+    rows = [s for s in session.scalars(select(Source)) if unwanted(s)]
+    ids = {s.id for s in rows}
+    skipped = 0
+    for item in session.scalars(select(Item).where(Item.status.in_(["new", "scored", "picked"]))):
+        extra = item.extra or {}
+        if item.source_id in ids or extra.get("source_kind") == "ebay" or "miniprint.io" in (item.url or ""):
+            item.status = "skipped"
+            skipped += 1
+    for src in rows:
+        session.delete(src)
+    topic = session.scalar(select(Topic).where(Topic.slug == "inciardi"))
+    if topic is not None:
+        topic.description = topic.description.replace(
+            ", and resale prices on eBay and Depop.", ". Leave out resale listings and prices.")
+        topic.urgent_criteria = re.sub(r"\s*An eBay 'first sighting'.*?catalogued\)\.", "",
+                                       topic.urgent_criteria or "", flags=re.S)
+    return f"removed {len(rows)} sources ({', '.join(s.name for s in rows)}), skipped {skipped} items"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -353,6 +375,7 @@ MIGRATIONS = [
     ("2026-11-17-drop-reddit-sources", _drop_reddit_sources),
     ("2026-11-17-default-races", _default_races),
     ("2026-11-19-no-trip-suggestions", _no_trip_suggestions),
+    ("2026-11-21-drop-listings-and-miniprint", _drop_listings_and_miniprint),
 ]
 
 

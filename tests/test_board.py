@@ -113,3 +113,35 @@ def test_no_trip_suggestions_migration():
         t.urgent_criteria = old_criteria
         if created:
             s.delete(t)
+
+
+def test_drop_listings_and_miniprint():
+    from app.models import Source
+    from app.seed import _drop_listings_and_miniprint
+
+    init_db()
+    with session_scope() as s:
+        t, created = _topic(s, "inciardi")
+        old = (t.description, t.urgent_criteria)
+        t.description = "Care about rare prints, and resale prices on eBay and Depop."
+        t.urgent_criteria = "A new machine. An eBay 'first sighting' of a design counts if new (not just an old print we hadn't catalogued)."
+        keep = Source(topic_id=t.id, kind="page_watch", name="shop", config={"url": "https://inciardiprints.com/"})
+        gone = [Source(topic_id=t.id, kind="ebay", name="eBay", config={"query": "x"}),
+                Source(topic_id=t.id, kind="sitemap", name="mp", config={"url": "https://miniprint.io/sitemap.xml"}),
+                Source(topic_id=t.id, kind="websearch", name="resale", config={"query": "q", "domains": "depop.com, etsy.com"})]
+        s.add_all([keep, *gone])
+        s.flush()
+        item = Item(topic_id=t.id, source_id=gone[0].id, dedupe_key=dedupe_key(f"eb:{utcnow()}"), title="x",
+                    status="scored", extra={"source_kind": "ebay"})
+        s.add(item)
+        s.flush()
+        note = _drop_listings_and_miniprint(s)
+        s.flush()
+        assert "removed 3" in note and item.status == "skipped"
+        assert s.get(Source, keep.id) is not None
+        assert "eBay" not in t.description and "first sighting" not in t.urgent_criteria
+        s.delete(item)
+        s.delete(keep)
+        t.description, t.urgent_criteria = old
+        if created:
+            s.delete(t)

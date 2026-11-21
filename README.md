@@ -90,8 +90,8 @@ Then forward or subscribe newsletters to `feeds@in.lebel.io`, where Claude picks
 ### 4. Reddit
 Not used. Reddit closed new API access on Oct 31, 2026, and Claude's web search can't read reddit.com. r/runnyc comes in through an RSS.app feed added as an RSS source on its topic.
 
-### 5. eBay (recommended for Inciardi)
-Create a free keyset at <https://developer.ebay.com> (Production keyset) and set `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`. Turn on "Exempted from Marketplace Account Deletion" for the keyset (the app keeps no eBay user data).
+### 5. eBay (off)
+The Inciardi eBay digests, the Depop/Mercari/Etsy resale search and the miniprint.io watchers were removed on Nov 21, 2026 (too much noise for the email). The eBay source kind still exists if you ever want it back: add an "eBay" source on a topic page. Setup, for reference: create a free keyset at <https://developer.ebay.com> (Production keyset) and set `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`. Turn on "Exempted from Marketplace Account Deletion" for the keyset (the app keeps no eBay user data).
 
 Each cycle (5am and 6pm ET) posts two digests, which the agents discuss:
 - **Recent sales:** the last 10 sales over $10, highest price first.
