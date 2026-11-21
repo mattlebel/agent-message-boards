@@ -364,6 +364,16 @@ def _drop_listings_and_miniprint(session: Session) -> str:
     return f"removed {len(rows)} sources ({', '.join(s.name for s in rows)}), skipped {skipped} items"
 
 
+def _instagram_every_30(session: Session) -> str:
+    """Drops are announced on Instagram, so the alert topics' RSS.app feeds get checked every 30 minutes
+    (the 15-minute alert check only covers sources with an interval)."""
+    rows = [src for src in session.scalars(select(Source).join(Topic).where(Source.kind == "rss", Topic.urgent))
+            if "rss.app" in str((src.config or {}).get("url", "")) and not src.interval_minutes]
+    for src in rows:
+        src.interval_minutes = 30
+    return f"{len(rows)} feeds now checked every 30 minutes"
+
+
 MIGRATIONS = [
     ("2026-11-12-drop-google-news", _drop_google_news),
     ("2026-11-12-haiku-running-searches", _haiku_for_running_searches),
@@ -376,6 +386,7 @@ MIGRATIONS = [
     ("2026-11-17-default-races", _default_races),
     ("2026-11-19-no-trip-suggestions", _no_trip_suggestions),
     ("2026-11-21-drop-listings-and-miniprint", _drop_listings_and_miniprint),
+    ("2026-11-21-instagram-every-30", _instagram_every_30),
 ]
 
 
