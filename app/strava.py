@@ -123,7 +123,7 @@ def _access_token(session: Session) -> str:
     return fresh["access_token"]
 
 
-def activities(session: Session, days: int = 42) -> list[dict]:
+def activities(session: Session, days: int = 49) -> list[dict]:
     token = _access_token(session)
     after = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
     out: list[dict] = []
@@ -155,34 +155,53 @@ def _start(a: dict) -> datetime:
     return datetime.fromisoformat(raw.replace("Z", "")).replace(tzinfo=None)
 
 
+def week_start(day: datetime) -> datetime:
+    """Monday 00:00 of the calendar week containing day (Strava's weeks run Monday to Sunday)."""
+    return (day - timedelta(days=day.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def summarize(acts: list[dict], today: datetime | None = None) -> str:
-    """Plain numbers about the last six weeks of running. Empty if there were no runs."""
-    today = (today or datetime.now(config.TZ).replace(tzinfo=None)).replace(hour=23, minute=59)
+    """Plain numbers about recent running, by calendar week (Monday-Sunday). Empty if there were no runs."""
+    today = (today or datetime.now(config.TZ).replace(tzinfo=None)).replace(hour=0, minute=0, second=0, microsecond=0)
     runs = [a for a in acts if (a.get("sport_type") or a.get("type")) in RUN_TYPES]
     if not runs:
         return ""
-    weeks: dict[int, float] = defaultdict(float)
-    for a in runs:
-        weeks[(today - _start(a)).days // 7] += _miles(a.get("distance", 0))
-    this_week = weeks.get(0, 0.0)
-    prior = [weeks.get(w, 0.0) for w in range(1, 5)]
-    lines = [f"Training from Strava (as of {today:%a %b %-d}):",
-             f"- Last 7 days: {this_week:.1f} mi over {sum(1 for a in runs if (today - _start(a)).days < 7)} runs. "
-             f"Average of the 4 weeks before: {sum(prior) / 4:.1f} mi/week."]
-    recent = [a for a in runs if (today - _start(a)).days < 14]
+    this_monday = week_start(today)
+
+    def week_of(a: dict) -> int:
+        """0 = this calendar week, 1 = last week, ..."""
+        return (this_monday - week_start(_start(a))).days // 7
+
+    def total(n: int) -> tuple[float, int]:
+        rows = [a for a in runs if week_of(a) == n]
+        return sum(_miles(a.get("distance", 0)) for a in rows), len(rows)
+
+    def span(n: int, through: datetime | None = None) -> str:
+        first = this_monday - timedelta(weeks=n)
+        last = through or first + timedelta(days=6)
+        return f"{first:%a %b %-d}-{last:%a %b %-d}"
+
+    this_mi, this_n = total(0)
+    last_mi, last_n = total(1)
+    prior = [total(n)[0] for n in range(2, 6)]
+    lines = [f"Training from Strava (as of {today:%a %b %-d}). Weeks are calendar weeks, Monday to Sunday; use "
+             "these figures as given when you mention this week or last week:",
+             f"- This week so far ({span(0, today)}): {this_mi:.1f} mi over {this_n} run{'s' if this_n != 1 else ''}.",
+             f"- Last week ({span(1)}): {last_mi:.1f} mi over {last_n} run{'s' if last_n != 1 else ''}.",
+             f"- The 4 weeks before that averaged {sum(prior) / 4:.1f} mi/week."]
+    recent = [a for a in runs if week_of(a) <= 1]
     if recent:
         long_run = max(recent, key=lambda a: a.get("distance", 0))
-        lines.append(f"- Longest run in the last 2 weeks: {_miles(long_run['distance']):.1f} mi on "
+        lines.append(f"- Longest run this week or last: {_miles(long_run['distance']):.1f} mi on "
                      f"{_start(long_run):%a %b %-d} ({_pace(long_run.get('moving_time'), long_run['distance'])}).")
     races = sorted((a for a in runs if a.get("workout_type") == 1), key=_start, reverse=True)
     for r in races[:2]:
         lines.append(f"- Race: {r.get('name', 'race')} on {_start(r):%b %-d}, {_miles(r['distance']):.2f} mi in "
                      f"{timedelta(seconds=int(r.get('moving_time', 0)))} ({_pace(r.get('moving_time'), r['distance'])}).")
-    workouts = sorted((a for a in runs if a.get("workout_type") == 3 and (today - _start(a)).days < 14),
-                      key=_start, reverse=True)
+    workouts = sorted((a for a in runs if a.get("workout_type") == 3 and week_of(a) <= 1), key=_start, reverse=True)
     if workouts:
-        lines.append("- Workouts in the last 2 weeks: " + "; ".join(
-            f"{w.get('name', 'workout')} ({_start(w):%b %-d}, {_miles(w['distance']):.1f} mi)" for w in workouts[:3]) + ".")
+        lines.append("- Workouts this week and last: " + "; ".join(
+            f"{w.get('name', 'workout')} ({_start(w):%a %b %-d}, {_miles(w['distance']):.1f} mi)" for w in workouts[:3]) + ".")
     return "\n".join(lines)
 
 

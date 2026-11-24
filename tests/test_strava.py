@@ -19,10 +19,15 @@ def test_summary_numbers():
         _run(8, 3.11, 18, 1, "Turkey Trot 5K"), _run(1, 10, 80),
         {"sport_type": "Ride", "start_date_local": "2026-11-15T07:00:00Z", "distance": 40000, "moving_time": 3600},
     ]
-    text = strava.summarize(acts, today)
-    assert "Last 7 days: 25.0 mi over 3 runs" in text
-    assert "Longest run in the last 2 weeks: 14.0 mi on Mon Nov 16 (8:00/mi)" in text
+    text = strava.summarize(acts, today)  # Tue Nov 17: this week is Mon Nov 16-Sun Nov 22
+    assert "This week so far (Mon Nov 16-Tue Nov 17): 14.0 mi over 1 run." in text
+    assert "Last week (Mon Nov 9-Sun Nov 15): 11.0 mi over 2 runs." in text  # Sat 14th + Thu 12th
+    assert "averaged 3.3 mi/week" in text  # Sun Nov 8 (3.11) + Sun Nov 1 (10) over Oct 12-Nov 8
+    assert "Longest run this week or last: 14.0 mi on Mon Nov 16 (8:00/mi)" in text
     assert "Race: Turkey Trot 5K on Nov 8" in text and "Mile repeats" in text
+    # Sunday still belongs to the week that started the Monday before.
+    sunday = strava.summarize([_run(22, 5, 40)], datetime(2026, 11, 22))
+    assert "This week so far (Mon Nov 16-Sun Nov 22): 5.0 mi over 1 run." in sunday
     assert strava.summarize([], today) == ""
 
 
